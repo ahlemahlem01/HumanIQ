@@ -18,7 +18,7 @@ type CvCard = {
   preview: string;
 };
 
-export default function CvLibraryPage() {
+function CvLibraryPageContent() {
   const { token } = useAuth();
   const { query } = useShellSearch();
   const [rows, setRows] = useState<CvCard[] | null>(null);
@@ -50,7 +50,7 @@ export default function CvLibraryPage() {
   }, [query, rows, skillFilter]);
 
   return (
-    <AppShell role="RECRUITER" plain>
+    <>
       <div className="mx-auto max-w-[900px]">
         <header>
           <h1 className="text-3xl font-semibold tracking-tight">CVthèque</h1>
@@ -144,7 +144,7 @@ export default function CvLibraryPage() {
           ))}
         </ul>
       </div>
-    </AppShell>
+    </>
   );
 }
 
@@ -155,4 +155,13 @@ function initials(value: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+// The content must sit INSIDE AppShell: useShellSearch() reads the search box of the shell's header.
+export default function CvLibraryPage() {
+  return (
+    <AppShell role="RECRUITER" plain>
+      <CvLibraryPageContent />
+    </AppShell>
+  );
 }

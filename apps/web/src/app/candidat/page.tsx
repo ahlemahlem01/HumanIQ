@@ -1,616 +1,385 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { AppShell, useShellSearch } from "@/components/app-shell";
-import { api, mediaUrl } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import { Card, EmptyState, Pill, primaryButton, ScoreRing, Skeleton } from "@/components/candidate-ui";
+import { api, STAGE_LABEL } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-type FeedItem = {
+type Job = {
   id: string;
-  reason: "suivi" | "recommande" | "pub" | "vous";
-  body: string;
+  title: string;
+  location: string;
+  remote: boolean;
+  contractType: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  currency: string;
+  requiredSkills: string[];
   createdAt: string;
-  likes: number;
-  comments: number;
-  reposts: number;
-  liked: boolean;
-  saved: boolean;
-  reposted: boolean;
-  author: { id: string; firstName: string; lastName: string; headline: string };
+  company: { name: string };
 };
 
-type JobLite = { id: string; title: string; location: string; remote: boolean; company: { name: string } };
-
-type Comment = { id: string; body: string; createdAt: string; author: string };
-
-type Profile = {
+type Recommendation = { score?: number; semanticScore: number; job: { id: string } };
+type Application = { id: string; stage: string; job: Job };
+type Me = {
   headline: string | null;
-  avatarImage: string | null;
-  coverImage: string | null;
+  bio: string | null;
   location: string | null;
-  experiences: { company: string; current: boolean }[];
-  user: { firstName: string; lastName: string };
+  skills: string[];
+  experiences?: unknown[];
+  educations?: unknown[];
 };
+type Test = { id: string; status: string };
+type Interview = { id: string; status: string };
 
-const REASON: Record<FeedItem["reason"], string> = {
-  suivi: "Personne suivie",
-  recommande: "Recommandé pour vous",
-  pub: "Publicité",
-  vous: "Vous",
-};
+const CONTRACT_LABEL: Record<string, string> = { CDI: "CDI", CDD: "CDD", STAGE: "Stage", INTERNSHIP: "Stage", FREELANCE: "Freelance", ALTERNANCE: "Alternance" };
 
-export default function CandidateHome() {
+export default function CandidateHomePage() {
   const { token, user } = useAuth();
-  const [items, setItems] = useState<FeedItem[] | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [savedCount, setSavedCount] = useState(0);
-  const [profileViews, setProfileViews] = useState(0);
-  const [showSaved, setShowSaved] = useState(false);
-  const [savedItems, setSavedItems] = useState<FeedItem[] | null>(null);
-  const { query } = useShellSearch();
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [threads, setThreads] = useState<Record<string, Comment[]>>({});
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [composing, setComposing] = useState(false);
-  const [posting, setPosting] = useState(false);
-  const [suggestions, setSuggestions] = useState<JobLite[]>([]);
+  const router = useRouter();
+  const [jobs, setJobs] = useState<Job[] | null>(null);
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [apps, setApps] = useState<Application[] | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
+  const [tests, setTests] = useState<Test[]>([]);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [unread, setUnread] = useState(0);
+  const [saved, setSaved] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!token) return;
-    api<{ items: FeedItem[]; savedCount: number }>("/feed", { token })
-      .then((feed) => {
-        setItems(feed.items);
-        setSavedCount(feed.savedCount ?? 0);
-      })
-      .catch(() => setItems([]));
-    api<Profile>("/candidates/me", { token }).then(setProfile).catch(() => setProfile(null));
-    api<{ count: number }[]>("/candidates/me/views", { token })
-      .then((rows) => setProfileViews(rows.reduce((total, row) => total + row.count, 0)))
-      .catch(() => setProfileViews(0));
+    api<Job[]>("/jobs", { token }).then(setJobs).catch(() => setJobs([]));
+    api<Recommendation[]>("/ai/recommendations", { token })
+      .then((rows) => setScores(Object.fromEntries(rows.map((row) => [row.job.id, row.score ?? row.semanticScore]))))
+      .catch(() => setScores({}));
+    api<Application[]>("/applications/mine", { token }).then(setApps).catch(() => setApps([]));
+    api<Me>("/candidates/me", { token }).then(setMe).catch(() => undefined);
+    api<Test[]>("/assessments/mine", { token }).then(setTests).catch(() => undefined);
+    api<Interview[]>("/interviews", { token }).then(setInterviews).catch(() => undefined);
+    api<{ count: number }>("/messages/unread", { token }).then((result) => setUnread(result.count)).catch(() => undefined);
   }, [token]);
 
+  // Saved jobs live in the browser (same key as the Jobs page).
   useEffect(() => {
-    api<JobLite[]>("/jobs").then((rows) => setSuggestions(rows.slice(0, 4))).catch(() => setSuggestions([]));
-  }, []);
+    if (!user) return;
+    try {
+      const raw = localStorage.getItem(`nextgen_saved_${user.id}`);
+      setSaved(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      setSaved([]);
+    }
+  }, [user]);
 
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const source = showSaved ? (savedItems ?? []) : (items ?? []);
-    return source.filter((item) => {
-      if (showSaved && !item.saved) return false;
-      if (!needle) return true;
-      return `${item.author.firstName} ${item.author.lastName} ${item.author.headline} ${item.body}`.toLowerCase().includes(needle);
+  function toggleSaved(id: string) {
+    if (!user) return;
+    setSaved((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [id, ...current];
+      try {
+        localStorage.setItem(`nextgen_saved_${user.id}`, JSON.stringify(next));
+      } catch {
+        // storage unavailable: the heart still toggles for this visit
+      }
+      return next;
     });
-  }, [items, query, savedItems, showSaved]);
-
-  const name = profile ? `${profile.user.firstName} ${profile.user.lastName}` : user ? `${user.firstName} ${user.lastName}` : "";
-  const company = profile?.experiences.find((item) => item.current)?.company ?? profile?.experiences[0]?.company;
-
-  async function openSaved() {
-    if (!token) return;
-    if (showSaved) {
-      setShowSaved(false);
-      return;
-    }
-    setShowSaved(true);
-    const result = await api<{ items: FeedItem[] }>("/feed/saved", { token });
-    setSavedItems(result.items);
   }
 
-  function applyStats(id: string, stats: Partial<FeedItem>) {
-    const next = (current: FeedItem[] | null) => current?.map((item) => (item.id === id ? { ...item, ...stats } : item)) ?? null;
-    setItems(next);
-    setSavedItems(next);
+  function search(event: FormEvent) {
+    event.preventDefault();
+    const q = query.trim();
+    router.push(q ? `/candidat/emplois?q=${encodeURIComponent(q)}` : "/candidat/emplois");
   }
 
-  async function act(id: string, action: "like" | "save" | "repost") {
-    if (!token) return;
-    setBusy(`${action}-${id}`);
-    const wasSaved = items?.find((item) => item.id === id)?.saved;
-    try {
-      const stats = await api<Partial<FeedItem>>(`/feed/${id}/${action}`, { method: "POST", token });
-      applyStats(id, stats);
-      if (action === "save" && wasSaved !== stats.saved) setSavedCount((count) => count + (stats.saved ? 1 : -1));
-    } finally {
-      setBusy(null);
-    }
-  }
+  const appliedIds = useMemo(() => new Set((apps ?? []).map((item) => item.job.id)), [apps]);
+  const mySkills = useMemo(() => new Set((me?.skills ?? []).map((skill) => skill.toLowerCase())), [me]);
 
-  async function openComments(id: string) {
-    if (!token) return;
-    if (openId === id) {
-      setOpenId(null);
-      return;
-    }
-    setOpenId(id);
-    if (threads[id]) return;
-    const rows = await api<Comment[]>(`/feed/${id}/comments`, { token });
-    setThreads((current) => ({ ...current, [id]: rows }));
-  }
+  const recommended = useMemo(() => {
+    const open = (jobs ?? []).filter((job) => !appliedIds.has(job.id));
+    return [...open].sort((a, b) => (scores[b.id] ?? -1) - (scores[a.id] ?? -1) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+  }, [jobs, scores, appliedIds]);
 
-  async function sendComment(id: string) {
-    if (!token) return;
-    const body = (drafts[id] ?? "").trim();
-    if (!body) return;
-    setBusy(`comment-${id}`);
-    try {
-      const result = await api<{
-        comment: Comment;
-        likes: number;
-        comments: number;
-        reposts: number;
-        liked: boolean;
-        saved: boolean;
-        reposted: boolean;
-      }>(`/feed/${id}/comments`, { method: "POST", token, body: { body } });
-      setThreads((current) => ({ ...current, [id]: [...(current[id] ?? []), result.comment] }));
-      setDrafts((current) => ({ ...current, [id]: "" }));
-      applyStats(id, result);
-    } finally {
-      setBusy(null);
-    }
-  }
+  const latest = useMemo(() => {
+    const shown = new Set(recommended.map((job) => job.id));
+    return [...(jobs ?? [])]
+      .filter((job) => !shown.has(job.id) && !appliedIds.has(job.id))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
+  }, [jobs, recommended, appliedIds]);
 
-  async function publish() {
-    if (!token) return;
-    const body = draft.trim();
-    if (!body) return;
-    setPosting(true);
-    try {
-      const created = await api<FeedItem>("/feed", { method: "POST", token, body: { body } });
-      setItems((current) => [created, ...(current ?? [])]);
-      setDraft("");
-      setComposing(false);
-    } finally {
-      setPosting(false);
-    }
-  }
+  const quick = useMemo(() => {
+    const list = jobs ?? [];
+    const contracts = Array.from(new Set(list.map((job) => job.contractType).filter(Boolean))).slice(0, 3);
+    const places = Array.from(new Set(list.map((job) => job.location.split(",")[0].trim()).filter(Boolean))).slice(0, 2);
+    const items: { label: string; href: string }[] = [];
+    if (list.some((job) => job.remote)) items.push({ label: "Remote", href: "/candidat/emplois?remote=1" });
+    for (const contract of contracts) items.push({ label: CONTRACT_LABEL[contract] ?? contract, href: `/candidat/emplois?contract=${encodeURIComponent(contract)}` });
+    for (const place of places) items.push({ label: place, href: `/candidat/emplois?place=${encodeURIComponent(place)}` });
+    return items;
+  }, [jobs]);
 
-  const completion = profile
-    ? Math.round(
-        ([
-          Boolean(profile.headline),
-          Boolean(profile.location),
-          profile.experiences.length > 0,
-        ].filter(Boolean).length /
-          3) *
-          100,
-      )
-    : 0;
+  const profile = useMemo(() => {
+    if (!me) return null;
+    const steps: { label: string; done: boolean; href: string }[] = [
+      { label: "Ajouter un titre professionnel", done: Boolean(me.headline?.trim()), href: "/candidat/cv-builder?step=identite" },
+      { label: "Rédiger un résumé", done: Boolean(me.bio?.trim()), href: "/candidat/cv-builder?step=resume" },
+      { label: "Indiquer votre lieu", done: Boolean(me.location?.trim()), href: "/candidat/cv-builder?step=identite" },
+      { label: "Ajouter une expérience", done: (me.experiences?.length ?? 0) > 0, href: "/candidat/cv-builder?step=experience" },
+      { label: "Ajouter une formation", done: (me.educations?.length ?? 0) > 0, href: "/candidat/cv-builder?step=formation" },
+      { label: "Lister vos compétences", done: me.skills.length >= 3, href: "/candidat/cv-builder?step=competences" },
+    ];
+    const done = steps.filter((step) => step.done).length;
+    return { percent: Math.round((done / steps.length) * 100), next: steps.find((step) => !step.done) ?? null };
+  }, [me]);
+
+  const todoTests = tests.filter((test) => test.status !== "COMPLETED").length;
+  const todoInterviews = interviews.filter((item) => item.status !== "COMPLETED").length;
+  const todo = [
+    todoTests > 0 ? { label: `${todoTests} test${todoTests > 1 ? "s" : ""} à passer`, href: "/candidat/tests" } : null,
+    unread > 0 ? { label: `${unread} message${unread > 1 ? "s" : ""} non lu${unread > 1 ? "s" : ""}`, href: "/candidat/messages" } : null,
+    todoInterviews > 0 ? { label: `${todoInterviews} entretien${todoInterviews > 1 ? "s" : ""} à reprendre`, href: "/candidat/entretien" } : null,
+  ].filter((item): item is { label: string; href: string } => item !== null);
+
+  const firstName = user?.firstName ?? "";
 
   return (
     <AppShell role="CANDIDATE" plain>
-      <div className="mx-auto grid max-w-[1180px] items-start gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_300px]">
-        {/* Left column */}
-        <aside className="hidden space-y-3 lg:block">
-          <section className="overflow-hidden rounded-2xl border border-line bg-cream">
-            <div className="h-16 bg-forest">
-              {profile?.coverImage ? (
-                <img src={mediaUrl(`/uploads/covers/${profile.coverImage}`)} alt="" className="h-full w-full object-cover" />
-              ) : null}
+      <div className="mx-auto max-w-5xl">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{firstName ? `Bonjour ${firstName}` : "Bonjour"}</h1>
+          <p className="mt-1 text-[15px] text-sage">Trouvez votre prochain poste.</p>
+          <form onSubmit={search} className="mt-4 flex gap-2" role="search">
+            <label className="sr-only" htmlFor="home-search">
+              Rechercher un poste, une entreprise ou une compétence
+            </label>
+            <input
+              id="home-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Poste, entreprise ou compétence"
+              className="min-w-0 flex-1 rounded-full border border-line bg-white px-5 py-3 text-[15px] outline-none transition placeholder:text-sage/70 focus:border-forest focus:ring-4 focus:ring-forest/10"
+            />
+            <button className={`${primaryButton} px-6`}>Rechercher</button>
+          </form>
+          {quick.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Raccourcis">
+              {quick.map((item) => (
+                <Link key={item.label} href={item.href} className="rounded-full border border-line bg-white px-3.5 py-1.5 text-sm font-medium transition hover:border-forest hover:text-forest active:scale-95">
+                  {item.label}
+                </Link>
+              ))}
             </div>
-            <div className="px-4 pb-4 text-center">
-              <Link
-                href="/candidat/profil"
-                className="-mt-8 mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-forest text-base font-semibold text-white"
-              >
-                {profile?.avatarImage ? (
-                  <img src={mediaUrl(`/uploads/avatars/${profile.avatarImage}`)} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  initials(name)
-                )}
-              </Link>
-              <Link href="/candidat/profil" className="mt-2 block text-base font-semibold leading-tight hover:underline">
-                {name}
-              </Link>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-sage">{profile?.headline || "Ajoutez un titre"}</p>
-              {profile?.location ? <p className="mt-1 text-xs text-sage">{profile.location}</p> : null}
-              {company ? <p className="mt-1 text-xs font-medium">{company}</p> : null}
-            </div>
-            <div className="border-t border-line px-4 py-3 text-xs">
-              <Link href="/candidat/visibilite" className="flex items-center justify-between gap-3 hover:text-forest">
-                <span className="text-sage">Vues du profil</span>
-                <span className="font-semibold text-forest">{profileViews}</span>
-              </Link>
-              <button type="button" onClick={() => void openSaved()} className="mt-2 flex w-full items-center justify-between gap-3 text-left hover:text-forest">
-                <span className="text-sage">Publications enregistrées</span>
-                <span className="font-semibold text-forest">{savedCount}</span>
-              </button>
-            </div>
-            {completion < 100 ? (
-              <Link href="/candidat/profil" className="block border-t border-line px-4 py-3 text-xs hover:bg-paper">
-                <span className="flex items-center justify-between">
-                  <span className="font-semibold">Force du profil</span>
-                  <span className="text-forest">{completion}%</span>
-                </span>
-                <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-paper">
-                  <span className="block h-full rounded-full bg-forest" style={{ width: `${completion}%` }} />
-                </span>
-              </Link>
-            ) : null}
-          </section>
+          ) : null}
+        </header>
 
-          <section className="rounded-2xl border border-line bg-cream p-2 text-sm">
-            <RailLink icon="save" onClick={() => void openSaved()} active={showSaved}>
-              Éléments enregistrés
-            </RailLink>
-            <RailLink href="/candidat/visibilite" icon="eye">
-              Visibilité
-            </RailLink>
-            <RailLink href="/candidat/cv" icon="file">
-              Mon CV
-            </RailLink>
-            <RailLink href="/candidat/emplois" icon="brief">
-              Emplois
-            </RailLink>
-          </section>
-        </aside>
-
-        {/* Feed */}
-        <div className="min-w-0">
-          <section className="rounded-2xl border border-line bg-cream p-4">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/candidat/profil"
-                className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-forest text-sm font-semibold text-white"
-              >
-                {profile?.avatarImage ? (
-                  <img src={mediaUrl(`/uploads/avatars/${profile.avatarImage}`)} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  initials(name)
-                )}
-              </Link>
-              {composing ? (
-                <textarea
-                  autoFocus
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  maxLength={1500}
-                  rows={4}
-                  placeholder="De quoi voulez-vous parler ?"
-                  className="min-w-0 flex-1 resize-none rounded-2xl border border-line bg-paper px-4 py-3 text-sm outline-none focus:border-forest focus:ring-2 focus:ring-forest/20"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setComposing(true)}
-                  className="h-12 min-w-0 flex-1 rounded-full border border-line px-5 text-left text-sm font-medium text-sage hover:bg-paper"
-                >
-                  Commencer une publication
-                </button>
-              )}
-            </div>
-            {composing ? (
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="text-xs text-sage">{draft.length} / 1500</span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setComposing(false);
-                      setDraft("");
-                    }}
-                    className="rounded-full px-4 py-2 text-sm font-semibold text-sage hover:bg-paper"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void publish()}
-                    disabled={posting || !draft.trim()}
-                    className="rounded-full bg-forest px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  >
-                    {posting ? "Publication…" : "Publier"}
-                  </button>
+        <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="min-w-0 space-y-8">
+            <section aria-labelledby="reco-title">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <h2 id="reco-title" className="text-lg font-semibold">
+                  Recommandées pour vous
+                </h2>
+                <Link href="/candidat/emplois" className="text-sm font-semibold text-forest hover:underline">
+                  Toutes les offres →
+                </Link>
+              </div>
+              {jobs === null ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-32" />
+                  <Skeleton className="h-32" />
+                  <Skeleton className="h-32" />
                 </div>
-              </div>
-            ) : (
-              <div className="mt-3 flex gap-1 text-sm font-medium text-sage">
-                {[
-                  ["Rédiger un article", "M4 6h16M4 12h16M4 18h10"],
-                  ["Partager une réussite", "M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6L12 16.8 6.7 19.6l1.1-6L3.4 9.4l6-.8L12 3z"],
-                  ["Chercher un emploi", "M8 7V5h8v2M4 7h16v12H4V7Z"],
-                ].map(([label, icon], index) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => (index === 2 ? (window.location.href = "/candidat/emplois") : setComposing(true))}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg px-2 py-2 hover:bg-paper"
-                  >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5 text-forest" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={icon} />
-                    </svg>
-                    <span className="hidden sm:inline">{label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
+              ) : recommended.length === 0 ? (
+                <EmptyState title="Aucune offre à vous proposer pour l'instant" text="De nouvelles offres apparaîtront ici dès leur publication. En attendant, complétez votre profil pour de meilleures recommandations." href="/candidat/cv-builder" cta="Compléter mon CV" />
+              ) : (
+                <ul className="space-y-3">
+                  {recommended.map((job) => (
+                    <JobCard key={job.id} job={job} score={scores[job.id]} mySkills={mySkills} saved={saved.includes(job.id)} onSave={() => toggleSaved(job.id)} />
+                  ))}
+                </ul>
+              )}
+            </section>
 
-          <div className="my-4 flex items-center gap-3 text-xs text-sage">
-            <hr className="flex-1 border-line" />
-            <span>
-              {showSaved ? "Publications enregistrées" : "Trier par : "}
-              {showSaved ? null : <span className="font-semibold text-ink">Pertinence</span>}
-            </span>
+            {latest.length > 0 ? (
+              <section aria-labelledby="latest-title">
+                <h2 id="latest-title" className="mb-3 text-lg font-semibold">
+                  Récemment publiées
+                </h2>
+                <ul className="divide-y divide-line rounded-2xl border border-line bg-white">
+                  {latest.map((job) => (
+                    <li key={job.id}>
+                      <Link href={`/offres/${job.id}`} className="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-paper/60">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{job.title}</p>
+                          <p className="truncate text-sm text-sage">
+                            {job.company.name} · {job.location}
+                            {job.remote ? " · Remote" : ""}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-xs text-sage">{ago(job.createdAt)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
 
-          {query.trim() ? (
-            <Link href={`/candidat/emplois?q=${encodeURIComponent(query.trim())}`} className="mb-3 inline-block text-xs font-semibold text-forest">
-              Voir les emplois pour « {query.trim()} »
-            </Link>
-          ) : null}
-          <ul className="space-y-3">
-            {(showSaved ? savedItems : items) === null ? <li className="text-sm text-sage">Chargement du fil…</li> : null}
-            {(showSaved ? savedItems : items) && visible.length === 0 ? (
-              <li className="rounded-2xl border border-line bg-cream px-4 py-6 text-sm text-sage">
-                {showSaved ? "Aucune publication enregistrée." : query.trim() ? "Aucune publication pour cette recherche." : "Aucune publication pour le moment."}
-              </li>
+          <aside className="min-w-0 space-y-4">
+            {todo.length > 0 ? (
+              <Card className="p-4">
+                <h2 className="font-semibold">À faire</h2>
+                <ul className="mt-2 space-y-1">
+                  {todo.map((item) => (
+                    <li key={item.href}>
+                      <Link href={item.href} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm font-medium transition hover:bg-tint">
+                        {item.label}
+                        <span aria-hidden className="text-forest">
+                          →
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
             ) : null}
-            {visible.map((item) => (
-              <li key={item.id} className={`rounded-2xl border bg-cream ${item.reason === "pub" ? "border-forest/30" : "border-line"}`}>
-                <div className="flex items-start gap-3 px-4 pt-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-forest text-sm font-semibold text-white">
-                    {initials(`${item.author.firstName} ${item.author.lastName}`)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">
-                      {item.author.firstName} {item.author.lastName}
-                    </p>
-                    <p className="truncate text-xs text-sage">{item.author.headline}</p>
-                    <p className="text-xs text-sage">
-                      {REASON[item.reason]} · {postedAgo(item.createdAt)}
-                    </p>
-                  </div>
-                  <span className="select-none px-1 text-lg leading-none text-sage" aria-hidden>
-                    ···
-                  </span>
-                </div>
-                <p className="whitespace-pre-wrap px-4 pt-3 text-sm leading-6">{item.body}</p>
-                {item.reason === "pub" ? (
-                  <div className="px-4 pt-3">
-                    <Link href="/candidat/emplois" className="inline-block rounded-full border border-forest px-4 py-1.5 text-xs font-semibold text-forest hover:bg-tint">
-                      Voir les emplois
-                    </Link>
-                  </div>
-                ) : null}
-                {item.likes + item.comments + item.reposts > 0 ? (
-                  <div className="mt-3 flex items-center justify-between px-4 text-xs text-sage">
-                    <span>{item.likes > 0 ? `${item.likes} j'aime` : ""}</span>
-                    <span>
-                      {[
-                        item.comments > 0 ? `${item.comments} commentaire${item.comments > 1 ? "s" : ""}` : "",
-                        item.reposts > 0 ? `${item.reposts} republication${item.reposts > 1 ? "s" : ""}` : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </div>
-                ) : null}
-                <div className="mx-2 mb-1 mt-2 flex border-t border-line pt-1">
-                  <Action icon="like" on={item.liked} disabled={busy === `like-${item.id}`} onClick={() => act(item.id, "like")}>
-                    J'aime
-                  </Action>
-                  <Action icon="comment" on={openId === item.id} onClick={() => openComments(item.id)}>
-                    Commenter
-                  </Action>
-                  <Action icon="repost" on={item.reposted} disabled={busy === `repost-${item.id}`} onClick={() => act(item.id, "repost")}>
-                    Republier
-                  </Action>
-                  <Action icon="save" on={item.saved} disabled={busy === `save-${item.id}`} onClick={() => act(item.id, "save")}>
-                    Enregistrer
-                  </Action>
-                </div>
-                {openId === item.id ? (
-                  <div className="border-t border-line px-4 py-3">
-                    <ul className="space-y-3">
-                      {(threads[item.id] ?? []).map((comment) => (
-                        <li key={comment.id} className="flex gap-2 text-sm">
-                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-tint text-[11px] font-semibold text-forest">
-                            {initials(comment.author)}
-                          </span>
-                          <div className="rounded-xl bg-paper px-3 py-2">
-                            <p>
-                              <span className="font-semibold">{comment.author}</span>
-                              <span className="text-xs text-sage"> · {postedAgo(comment.createdAt)}</span>
-                            </p>
-                            <p>{comment.body}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    <form
-                      className="mt-3 flex gap-2"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void sendComment(item.id);
-                      }}
-                    >
-                      <input
-                        value={drafts[item.id] ?? ""}
-                        onChange={(event) => setDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
-                        placeholder="Ajouter un commentaire…"
-                        className="min-w-0 flex-1 rounded-full border border-line bg-paper px-4 py-2 text-sm outline-none focus:border-forest focus:ring-2 focus:ring-forest/20"
-                      />
-                      <button disabled={busy === `comment-${item.id}`} className="rounded-full bg-forest px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                        Publier
-                      </button>
-                    </form>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
 
-        {/* Right column */}
-        <aside className="hidden space-y-3 xl:block">
-          <section className="rounded-2xl border border-line bg-cream p-4">
-            <h2 className="text-sm font-semibold">Offres pour vous</h2>
-            <ul className="mt-3 space-y-4">
-              {suggestions.map((job) => (
-                <li key={job.id}>
-                  <Link href={`/offres/${job.id}`} className="flex gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-tint text-xs font-bold text-forest">
-                      {initials(job.company.name)}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold hover:underline">{job.title}</span>
-                      <span className="block truncate text-xs text-sage">
-                        {job.company.name} · {job.location}
-                        {job.remote ? " · Télétravail" : ""}
-                      </span>
-                    </span>
+            <Card className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-semibold">Votre profil</h2>
+                {profile ? <Pill tone={profile.percent === 100 ? "good" : "info"}>{profile.percent} %</Pill> : null}
+              </div>
+              {profile ? (
+                <>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuenow={profile.percent} aria-valuemin={0} aria-valuemax={100}>
+                    <div className="h-full rounded-full bg-forest transition-all duration-700" style={{ width: `${profile.percent}%` }} />
+                  </div>
+                  {profile.next ? (
+                    <Link href={profile.next.href} className="mt-3 block text-sm font-semibold text-forest hover:underline">
+                      {profile.next.label} →
+                    </Link>
+                  ) : (
+                    <p className="mt-3 text-sm text-sage">Profil complet : les recruteurs vous trouvent plus facilement.</p>
+                  )}
+                </>
+              ) : (
+                <Skeleton className="mt-3 h-10" />
+              )}
+              <div className="mt-3 flex gap-3 border-t border-line pt-3 text-sm">
+                <Link href="/candidat/profil" className="font-medium text-forest hover:underline">
+                  Mon profil
+                </Link>
+                <Link href="/candidat/cv" className="font-medium text-forest hover:underline">
+                  Mon CV
+                </Link>
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-semibold">Mes candidatures</h2>
+                {apps && apps.length > 0 ? (
+                  <Link href="/candidat/emplois?tab=applied" className="text-sm font-semibold text-forest hover:underline">
+                    Voir tout
                   </Link>
-                </li>
-              ))}
-              {suggestions.length === 0 ? <li className="text-xs text-sage">Aucune offre pour le moment.</li> : null}
-            </ul>
-            <Link href="/candidat/emplois" className="mt-4 block border-t border-line pt-3 text-sm font-semibold text-sage hover:text-forest">
-              Voir toutes les offres →
+                ) : null}
+              </div>
+              {apps === null ? <Skeleton className="mt-3 h-16" /> : null}
+              {apps && apps.length === 0 ? <p className="mt-2 text-sm text-sage">Vous n&apos;avez pas encore postulé. Votre première candidature apparaîtra ici.</p> : null}
+              {apps && apps.length > 0 ? (
+                <ul className="mt-3 space-y-3">
+                  {apps.slice(0, 3).map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{item.job.title}</p>
+                        <p className="truncate text-xs text-sage">{item.job.company.name}</p>
+                      </div>
+                      <Pill tone={item.stage === "REJECTED" ? "bad" : item.stage === "OFFER" || item.stage === "HIRED" ? "good" : "info"} className="shrink-0">
+                        {STAGE_LABEL[item.stage] ?? item.stage}
+                      </Pill>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </Card>
+
+            <Link href="/candidat/fil" className="block rounded-2xl border border-line bg-white px-4 py-3 text-sm font-medium transition hover:border-forest/50 hover:text-forest">
+              Fil d&apos;actualité du réseau →
             </Link>
-          </section>
-          <p className="px-2 text-center text-[11px] leading-4 text-sage">
-            HumanIQ © 2026 · Conforme RGPD et INPDP
-          </p>
-        </aside>
+          </aside>
+        </div>
       </div>
     </AppShell>
   );
 }
 
-function RailLink({
-  href,
-  icon,
-  active,
-  onClick,
-  children,
-}: {
-  href?: string;
-  icon: "save" | "eye" | "file" | "brief";
-  active?: boolean;
-  onClick?: () => void;
-  children: string;
-}) {
-  const className = `flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left ${active ? "bg-paper font-semibold" : "hover:bg-paper"}`;
-  const body = (
-    <>
-      <RailIcon name={icon} />
-      <span>{children}</span>
-    </>
-  );
-  if (href) {
-    return (
-      <Link href={href} className={className}>
-        {body}
-      </Link>
-    );
-  }
+function JobCard({ job, score, mySkills, saved, onSave }: { job: Job; score?: number; mySkills: Set<string>; saved: boolean; onSave: () => void }) {
+  const matched = job.requiredSkills.filter((skill) => mySkills.has(skill.toLowerCase()));
   return (
-    <button type="button" onClick={onClick} className={className}>
-      {body}
-    </button>
+    <li>
+      <article className="relative rounded-2xl border border-line bg-white p-4 transition hover:border-forest/40 hover:shadow-sm sm:p-5">
+        <div className="flex items-start gap-4">
+          {/* Very low scores are noise (local similarity model): better no ring than an alarming "7". */}
+          {typeof score === "number" && score >= 25 ? <ScoreRing value={score} size={56} label={`Correspondance ${score} %`} /> : null}
+          <div className="min-w-0 flex-1 pr-8">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sage">{job.company.name}</p>
+            <h3 className="mt-0.5 text-base font-semibold leading-snug sm:text-lg">
+              <Link href={`/offres/${job.id}`} className="after:absolute after:inset-0 after:content-[''] hover:underline">
+                {job.title}
+              </Link>
+            </h3>
+            <p className="mt-1 text-sm text-sage">
+              {job.location}
+              {job.remote ? " · Remote" : ""}
+              {job.contractType ? ` · ${CONTRACT_LABEL[job.contractType] ?? job.contractType}` : ""}
+              {salary(job) ? ` · ${salary(job)}` : ""}
+            </p>
+            {job.requiredSkills.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {job.requiredSkills.slice(0, 6).map((skill) => (
+                  <Pill key={skill} tone={mySkills.has(skill.toLowerCase()) ? "good" : "neutral"}>
+                    {mySkills.has(skill.toLowerCase()) ? "✓ " : ""}
+                    {skill}
+                  </Pill>
+                ))}
+              </div>
+            ) : null}
+            {job.requiredSkills.length > 0 && mySkills.size > 0 ? (
+              <p className="mt-2 text-xs text-sage">
+                Vous avez {matched.length} compétence{matched.length > 1 ? "s" : ""} sur {job.requiredSkills.length}.
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          aria-pressed={saved}
+          aria-label={saved ? "Retirer des offres enregistrées" : "Enregistrer cette offre"}
+          className={`absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full transition active:scale-90 ${saved ? "text-forest" : "text-sage hover:bg-paper hover:text-forest"}`}
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+      </article>
+    </li>
   );
 }
 
-function RailIcon({ name }: { name: "save" | "eye" | "file" | "brief" }) {
-  const paths = {
-    save: "M7 4h10a1 1 0 0 1 1 1v15l-6-3.2L6 20V5a1 1 0 0 1 1-1Z",
-    eye: "M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
-    file: "M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z",
-    brief: "M8 7V5h8v2M4 7h16v12H4V7Z",
-  };
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4 text-forest" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-      <path d={paths[name]} strokeLinejoin="round" />
-    </svg>
-  );
+function salary(job: Job) {
+  if (!job.salaryMin) return "";
+  const max = job.salaryMax ?? job.salaryMin;
+  if (job.currency === "TND") return `${Math.round(job.salaryMin / 12).toLocaleString("fr-FR")}–${Math.round(max / 12).toLocaleString("fr-FR")} DT / mois`;
+  return `${job.salaryMin.toLocaleString("fr-FR")}–${max.toLocaleString("fr-FR")} € / an`;
 }
 
-function Action({
-  icon,
-  on,
-  count = 0,
-  disabled,
-  onClick,
-  children,
-}: {
-  icon: "like" | "comment" | "save" | "repost";
-  on?: boolean;
-  count?: number;
-  disabled?: boolean;
-  onClick: () => void;
-  children: string;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      aria-label={children}
-      title={children}
-      className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-1 py-2.5 text-sm font-medium disabled:opacity-50 ${
-        on ? "text-forest" : "text-sage hover:bg-paper hover:text-forest"
-      }`}
-    >
-      <ActionIcon name={icon} on={!!on} />
-      <span className="hidden sm:inline">{children}</span>
-    </button>
-  );
-}
-
-function ActionIcon({ name, on }: { name: "like" | "comment" | "save" | "repost"; on: boolean }) {
-  const common = { viewBox: "0 0 24 24", className: "h-4 w-4", "aria-hidden": true } as const;
-  if (name === "like") {
-    return (
-      <svg {...common} fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" />
-        <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-      </svg>
-    );
-  }
-  if (name === "comment") {
-    return (
-      <svg {...common} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    );
-  }
-  if (name === "save") {
-    return (
-      <svg {...common} fill={on ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-      </svg>
-    );
-  }
-  return (
-    <svg {...common} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 1l4 4-4 4" />
-      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-      <path d="M7 23l-4-4 4-4" />
-      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-    </svg>
-  );
-}
-
-function initials(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
-function postedAgo(iso: string) {
-  const minutes = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (minutes < 60) return `il y a ${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `il y a ${hours} h`;
-  const days = Math.round(hours / 24);
+function ago(iso: string) {
+  const days = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86400000));
+  if (days === 0) return "aujourd'hui";
+  if (days === 1) return "hier";
   if (days < 30) return `il y a ${days} j`;
   return new Date(iso).toLocaleDateString("fr-FR");
 }

@@ -46,14 +46,17 @@ const TABS: [Tab, string][] = [
 
 // useSearchParams() needs a Suspense boundary so the page can be pre-rendered in production builds.
 export default function JobsPage() {
+  // The content must sit INSIDE AppShell: useShellSearch() reads the search box of the shell's header.
   return (
     <Suspense fallback={null}>
-      <Jobs />
+      <AppShell role="CANDIDATE" plain>
+        <JobsContent />
+      </AppShell>
     </Suspense>
   );
 }
 
-function Jobs() {
+function JobsContent() {
   const params = useSearchParams();
   const { token, user } = useAuth();
   const [jobs, setJobs] = useState<Job[] | null>(null);
@@ -79,9 +82,17 @@ function Jobs() {
     api<Application[]>("/applications/mine", { token }).then(setApps).catch(() => setApps([]));
   }, [token]);
 
+  // Links from the home page can arrive pre-filtered: ?q=…&remote=1&contract=CDI&place=Paris&tab=applied
   useEffect(() => {
     const q = params.get("q");
     if (q) setQuery(q);
+    if (params.get("remote") === "1") setRemoteOnly(true);
+    const wantedContract = params.get("contract");
+    if (wantedContract) setContract(wantedContract);
+    const wantedPlace = params.get("place");
+    if (wantedPlace) setPlace(wantedPlace);
+    const wantedTab = params.get("tab");
+    if (wantedTab === "matches" || wantedTab === "recent" || wantedTab === "saved" || wantedTab === "applied") setTab(wantedTab);
   }, [params, setQuery]);
 
   useEffect(() => {
@@ -149,7 +160,7 @@ function Jobs() {
   }
 
   return (
-    <AppShell role="CANDIDATE" plain>
+    <>
       <div className="mx-auto max-w-[1180px]">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -347,7 +358,7 @@ function Jobs() {
           )}
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 

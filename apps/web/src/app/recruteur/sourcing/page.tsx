@@ -53,7 +53,7 @@ type ImportRow = {
 const fieldClass =
   "w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none focus:border-forest focus:ring-2 focus:ring-forest/20";
 
-export default function SourcingPage() {
+function SourcingPageContent() {
   const { token } = useAuth();
   const [result, setResult] = useState<SearchResult | null>(null);
   const [searching, setSearching] = useState(false);
@@ -170,7 +170,7 @@ export default function SourcingPage() {
   }
 
   return (
-    <AppShell role="RECRUITER" plain>
+    <>
       <div className="mx-auto grid max-w-[1180px] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
           <header>
@@ -459,7 +459,7 @@ export default function SourcingPage() {
           </details>
         </aside>
       </div>
-    </AppShell>
+    </>
   );
 }
 
@@ -487,5 +487,14 @@ function Highlight({ text }: { text: string }) {
         ),
       )}
     </>
+  );
+}
+
+// The content must sit INSIDE AppShell: useShellSearch() reads the search box of the shell's header.
+export default function SourcingPage() {
+  return (
+    <AppShell role="RECRUITER" plain>
+      <SourcingPageContent />
+    </AppShell>
   );
 }
