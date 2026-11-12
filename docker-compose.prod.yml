@@ -1,0 +1,103 @@
+# HumanIQ production stack: Postgres (pgvector) + Meilisearch + API + web + Caddy (HTTPS).
+#
+#   cp deploy/.env.production.example .env      # then fill it in
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml exec api npm run admin:create   # first administrator
+#
+# Only Caddy publishes ports (80 and 443). Everything else stays on the private network.
+
+name: humaniq
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: humaniq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD est obligatoire}
+      POSTGRES_DB: humaniq
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U humaniq -d humaniq"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY est obligatoire (16 caractères minimum)}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+
+  api:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: "4100"
+      DATABASE_URL: postgresql://humaniq:${POSTGRES_PASSWORD}@postgres:5432/humaniq
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET est obligatoire (longue valeur aléatoire)}
+      FRONTEND_URL: https://${DOMAIN:?DOMAIN est obligatoire}
+      EXTENSION_ORIGINS: ${EXTENSION_ORIGINS:-}
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_KEY: ${MEILI_MASTER_KEY}
+      TRUST_PROXY: "1"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-}
+      AI_LLM_MODEL: ${AI_LLM_MODEL:-}
+      AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+    volumes:
+      - uploads:/app/uploads
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        # Baked into the browser bundle at build time: rebuild (up --build) after changing DOMAIN.
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  meili_data:
+  uploads:
+  caddy_data:
+  caddy_config:

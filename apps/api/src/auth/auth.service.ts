@@ -1,8 +1,9 @@
-import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Role } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
+import { exposeFallbackLinks } from "../config/security";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto, RegisterDto } from "./dto";
 import { MailService } from "./mail.service";
@@ -13,6 +14,8 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(JwtService) private jwt: JwtService,
@@ -96,9 +99,11 @@ export class AuthService {
     const message = "Si un compte non confirmé correspond à cet e-mail, un nouveau lien vient d'être envoyé.";
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
     if (!user || user.anonymizedAt || user.emailVerifiedAt || !user.emailVerifyTokenHash) {
-      return { message, delivered: false };
+      return { message, delivered: true };
     }
     const verification = await this.issueVerification(user.id, user.email, user.firstName);
+    // A failed send in production answers like a success: the response must not tell strangers which addresses exist.
+    if (!exposeFallbackLinks()) return { message, delivered: true };
     return { message, ...verification };
   }
 
@@ -131,6 +136,9 @@ export class AuthService {
       return { delivered: true };
     } catch (err) {
       const detail = err instanceof Error ? err.message : "envoi impossible";
+      this.logger.error(`Verification e-mail failed: ${detail}`);
+      // Never expose the link in production: it would let anyone confirm an address that is not theirs.
+      if (!exposeFallbackLinks()) return { delivered: false, detail: "L'e-mail de confirmation n'a pas pu être envoyé. Réessayez dans quelques minutes." };
       return { delivered: false, verifyPath: `/verifier?token=${token}`, detail };
     }
   }
@@ -157,6 +165,7 @@ export class AuthService {
       return { delivered: true as const };
     } catch (err) {
       const detail = err instanceof Error ? err.message : "envoi impossible";
+      if (!exposeFallbackLinks()) return { delivered: false as const, detail: "L'invitation n'a pas pu être envoyée par e-mail. Réessayez dans quelques minutes." };
       return { delivered: false as const, resetPath, detail };
     }
   }
@@ -164,7 +173,8 @@ export class AuthService {
   async forgotPassword(email: string) {
     const message = "Si un compte correspond à cet e-mail, un message vient d'être envoyé. Il est valable 30 minutes.";
     const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user || user.anonymizedAt) return { message, delivered: false };
+    // Same answer whether or not the address has an account, so this endpoint cannot be used to look addresses up.
+    if (!user || user.anonymizedAt) return { message, delivered: true };
 
     const token = randomBytes(32).toString("hex");
     await this.prisma.user.update({
@@ -179,6 +189,10 @@ export class AuthService {
       await this.mail.sendPasswordReset(user.email, resetUrl);
     } catch (err) {
       const detail = err instanceof Error ? err.message : "envoi impossible";
+      // Production answers exactly like the normal case (no hint, no link): otherwise this endpoint would reveal
+      // which addresses have an account, and hand the reset link to whoever asked.
+      this.logger.error(`Password reset e-mail failed: ${detail}`);
+      if (!exposeFallbackLinks()) return { message, delivered: true };
       return {
         message: `L'e-mail n'a pas pu partir : ${detail}`,
         delivered: false,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { AppShell, useShellSearch } from "@/components/app-shell";
 import { MatchInsight, type MatchData } from "@/components/match-insight";
 import { api, STAGE_LABEL } from "@/lib/api";
@@ -44,7 +44,16 @@ const TABS: [Tab, string][] = [
   ["applied", "Candidatures"],
 ];
 
+// useSearchParams() needs a Suspense boundary so the page can be pre-rendered in production builds.
 export default function JobsPage() {
+  return (
+    <Suspense fallback={null}>
+      <Jobs />
+    </Suspense>
+  );
+}
+
+function Jobs() {
   const params = useSearchParams();
   const { token, user } = useAuth();
   const [jobs, setJobs] = useState<Job[] | null>(null);

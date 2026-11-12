@@ -3,7 +3,7 @@ import * as bcrypt from "bcryptjs";
 import { LocalEmbeddingProvider } from "../src/ai/providers/local-embedding.provider";
 import { OpenAIEmbeddingProvider } from "../src/ai/providers/openai-embedding.provider";
 import { toPgVector } from "../src/ai/providers/types";
-import { demoPassword, espritPassword } from "./seed-env";
+import { assertSafeToWipe, demoPassword, espritPassword } from "./seed-env";
 
 const prisma = new PrismaClient();
 
@@ -81,6 +81,7 @@ const embedder = openaiKey
   : new LocalEmbeddingProvider();
 
 async function main() {
+  assertSafeToWipe();
   await prisma.postLike.deleteMany();
   await prisma.postComment.deleteMany();
   await prisma.postSave.deleteMany();

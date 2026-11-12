@@ -15,6 +15,13 @@ try {
 
 const production = process.env.NODE_ENV === "production";
 
+/** seed.ts deletes every table before refilling it. Refuse to do that on a production database by mistake. */
+export function assertSafeToWipe() {
+  if (production && process.env.SEED_ALLOW_WIPE !== "yes") {
+    throw new Error("Refus : `seed` efface toute la base. En production, utilisez `npm run admin:create` (ou SEED_ALLOW_WIPE=yes en connaissance de cause).");
+  }
+}
+
 export function demoPassword() {
   const value = process.env.SEED_DEMO_PASSWORD;
   if (value) return value;

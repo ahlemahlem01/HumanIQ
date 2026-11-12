@@ -1,0 +1,23 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt) for a single domain:
+#   https://DOMAIN/            -> web (Next.js)
+#   https://DOMAIN/api, /uploads -> api (NestJS)
+# DOMAIN comes from the .env file next to docker-compose.prod.yml. With DOMAIN=localhost, Caddy uses a local certificate (testing).
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	@backend path /api/* /uploads/*
+	handle @backend {
+		reverse_proxy api:4100
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

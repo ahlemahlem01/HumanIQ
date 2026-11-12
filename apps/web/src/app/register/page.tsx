@@ -47,7 +47,11 @@ export default function RegisterPage() {
         <div className="space-y-3 rounded-3xl bg-paper p-5 text-sm">
           <p>Un e-mail de confirmation part vers {sent.email}. Ouvrez-le pour activer la connexion.</p>
           {sent.delivered ? null : (
-            <p className="text-warn">L&apos;envoi a échoué. Le lien direct reste utilisable.</p>
+            <p className="text-warn">
+              {sent.verifyPath
+                ? "L'envoi a échoué. Le lien direct reste utilisable."
+                : "L'envoi a échoué. Réessayez dans quelques minutes."}
+            </p>
           )}
           {sent.verifyPath ? (
             <Link href={sent.verifyPath} className="inline-block rounded-full bg-forest px-5 py-2.5 font-semibold text-white">
