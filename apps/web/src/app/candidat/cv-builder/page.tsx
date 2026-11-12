@@ -81,7 +81,13 @@ export default function CvStudioPage() {
   const { token } = useAuth();
   const [doc, setDoc] = useState<CvDoc | null>(null);
   const [jobs, setJobs] = useState<JobLite[]>([]);
-  const [step, setStep] = useState<StepId>("modele");
+  // Deep link from other pages: /candidat/cv-builder?step=competences. Nothing step-dependent renders before the CV loads,
+  // so reading the URL in the initializer cannot cause a hydration mismatch.
+  const [step, setStep] = useState<StepId>(() => {
+    if (typeof window === "undefined") return "modele";
+    const wanted = new URLSearchParams(window.location.search).get("step");
+    return STEPS.find((item) => item.id === wanted)?.id ?? "modele";
+  });
   const [status, setStatus] = useState<SaveState>("saved");
   const [error, setError] = useState("");
   const [pages, setPages] = useState<number | null>(null);
@@ -286,6 +292,7 @@ export default function CvStudioPage() {
   /* ---------- score, export ---------- */
 
   const result = useMemo(() => (doc ? scoreDoc(doc, pages) : { score: 0, checks: [] }), [doc, pages]);
+
 
   async function publishCv() {
     if (!token || !doc) return;

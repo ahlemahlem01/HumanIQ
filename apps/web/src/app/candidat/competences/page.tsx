@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { Card, EmptyState, PageHeader, Pill, primaryButton, Skeleton } from "@/components/candidate-ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -13,17 +15,29 @@ type OfferGap = {
   items: { skill: string; present: boolean; currentLevel: number }[];
 };
 
+type Me = { skillGaps?: Gap[]; skills?: string[] };
+
+const MIN_CHARS = 40;
+
 export default function SkillsPage() {
   const { token } = useAuth();
-  const [gaps, setGaps] = useState<Gap[]>([]);
+  const [gaps, setGaps] = useState<Gap[] | null>(null);
+  const [skills, setSkills] = useState<string[]>([]);
   const [offer, setOffer] = useState("");
   const [result, setResult] = useState<OfferGap | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [adding, setAdding] = useState("");
+  const [added, setAdded] = useState<string[]>([]);
 
   useEffect(() => {
     if (!token) return;
-    api<{ skillGaps: Gap[] }>("/candidates/me", { token }).then((profile) => setGaps(profile.skillGaps ?? []));
+    api<Me>("/candidates/me", { token })
+      .then((profile) => {
+        setGaps(profile.skillGaps ?? []);
+        setSkills(profile.skills ?? []);
+      })
+      .catch(() => setGaps([]));
   }, [token]);
 
   async function compare(event: FormEvent<HTMLFormElement>) {
@@ -31,6 +45,7 @@ export default function SkillsPage() {
     if (!token) return;
     setPending(true);
     setError("");
+    setAdded([]);
     try {
       setResult(await api<OfferGap>("/ai/skill-gap", { token, body: { description: offer } }));
     } catch (err) {
@@ -41,86 +56,163 @@ export default function SkillsPage() {
     }
   }
 
+  /** The candidate states they already have this skill: it joins their profile. Nothing is added on their behalf. */
+  async function addSkill(skill: string) {
+    if (!token || adding) return;
+    setAdding(skill);
+    setError("");
+    try {
+      const next = Array.from(new Set([...skills, skill]));
+      await api("/candidates/me", { method: "PATCH", token, body: { skills: next } });
+      setSkills(next);
+      setAdded((current) => [...current, skill]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ajout impossible.");
+    } finally {
+      setAdding("");
+    }
+  }
+
+  const items = result?.items.map((item) => ({ ...item, present: item.present || added.includes(item.skill) })) ?? [];
+  const covered = items.filter((item) => item.present).length;
+  const missing = items.filter((item) => !item.present);
+  const have = items.filter((item) => item.present);
+  const percent = items.length ? Math.round((covered / items.length) * 100) : 0;
+  const ranked = [...(gaps ?? [])].sort((a, b) => b.marketLevel - b.currentLevel - (a.marketLevel - a.currentLevel));
+
   return (
     <AppShell role="CANDIDATE" plain>
-      <div className="mx-auto max-w-2xl">
-        <h1 className="text-lg font-semibold">Écarts de compétences</h1>
-        <p className="mt-1 text-sm text-sage">
-          Comparez votre profil au marché, ou collez une offre pour voir ce qui manque.
-        </p>
+      <div className="mx-auto max-w-3xl">
+        <PageHeader title="Écarts de compétences" intro="Collez une offre pour voir ce qu'il vous manque, ou comparez votre profil au marché." />
 
-        <form onSubmit={compare} className="mt-5 rounded-xl border border-line bg-cream px-4 py-4">
-          <label className="text-sm font-semibold" htmlFor="offer">
-            Description de l&apos;offre
-          </label>
-          <textarea
-            id="offer"
-            value={offer}
-            onChange={(event) => setOffer(event.target.value)}
-            required
-            minLength={40}
-            rows={8}
-            placeholder="Collez ici l'annonce : missions, stack, niveau attendu…"
-            className="mt-2 min-h-40 w-full rounded-xl border border-line bg-paper p-3 text-sm outline-none ring-forest focus:ring-2"
-          />
-          <button
-            disabled={pending || offer.trim().length < 40}
-            className="mt-3 rounded-lg bg-forest px-3 py-1.5 text-xs font-semibold text-cream disabled:opacity-50"
-          >
-            {pending ? "Lecture…" : "Voir l'écart"}
-          </button>
-          {error ? <p className="mt-2 text-sm text-warn">{error}</p> : null}
-        </form>
+        <Card>
+          <form onSubmit={compare}>
+            <label className="text-sm font-semibold" htmlFor="offer">
+              Offre qui vous intéresse
+            </label>
+            <textarea
+              id="offer"
+              value={offer}
+              onChange={(event) => setOffer(event.target.value)}
+              required
+              minLength={MIN_CHARS}
+              rows={7}
+              placeholder="Collez ici l'annonce : missions, stack, niveau attendu…"
+              className="mt-2 w-full resize-y rounded-xl border border-line bg-white p-3 text-sm leading-6 outline-none transition placeholder:text-sage/70 focus:border-forest focus:ring-4 focus:ring-forest/10"
+            />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-sage">{offer.trim().length < MIN_CHARS ? `Encore ${MIN_CHARS - offer.trim().length} caractères minimum.` : "Prêt à comparer."}</p>
+              <button disabled={pending || offer.trim().length < MIN_CHARS} className={primaryButton}>
+                {pending ? "Lecture de l'offre…" : "Voir l'écart"}
+              </button>
+            </div>
+            {error ? (
+              <p role="alert" className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-warn">
+                {error}
+              </p>
+            ) : null}
+          </form>
+        </Card>
 
         {result ? (
-          <section className="mt-4 rounded-xl border border-line bg-cream px-4 py-4">
-            <p className="text-sm font-semibold">
-              {result.required
-                ? `${result.covered} compétence${result.covered > 1 ? "s" : ""} sur ${result.required} déjà dans votre profil`
-                : "Aucune compétence reconnue dans ce texte."}
-            </p>
-            {result.required ? (
-              <ul className="mt-3 space-y-3">
-                {result.items.map((item) => (
-                  <li key={item.skill}>
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <span className="font-medium">{item.skill}</span>
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${item.present ? "bg-[#e7f6ee] text-[#145c40]" : "bg-[#fff4e5] text-warn"}`}>
-                        {item.present ? "Déjà là" : "Manquante"}
-                      </span>
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-paper">
-                      <div className={`h-full rounded-full ${item.present ? "bg-good" : "bg-warn"}`} style={{ width: item.present ? "100%" : "18%" }} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
+          <Card className="mt-4">
+            {result.required === 0 ? (
+              <EmptyState title="Aucune compétence reconnue" text="Ajoutez les technologies demandées dans l'annonce (langages, outils, méthodes), puis relancez." />
             ) : (
-              <p className="mt-2 text-sm text-sage">Ajoutez les technologies demandées dans l&apos;annonce, puis relancez.</p>
+              <>
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="font-semibold">
+                    {covered} compétence{covered > 1 ? "s" : ""} sur {items.length} déjà dans votre profil
+                  </h2>
+                  <Pill tone={percent >= 75 ? "good" : percent >= 50 ? "info" : "warn"}>{percent} %</Pill>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="h-full rounded-full bg-forest transition-all duration-700" style={{ width: `${percent}%` }} />
+                </div>
+
+                {missing.length > 0 ? (
+                  <div className="mt-5">
+                    <h3 className="text-sm font-semibold">Il vous manque</h3>
+                    <p className="mt-0.5 text-sm text-sage">Si vous maîtrisez déjà l&apos;une d&apos;elles, ajoutez-la à votre profil.</p>
+                    <ul className="mt-3 space-y-2">
+                      {missing.map((item) => (
+                        <li key={item.skill} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5">
+                          <span className="text-sm font-medium">{item.skill}</span>
+                          <button
+                            type="button"
+                            disabled={adding !== ""}
+                            onClick={() => void addSkill(item.skill)}
+                            className="shrink-0 rounded-full border border-forest px-3 py-1 text-xs font-semibold text-forest transition hover:bg-tint active:scale-95 disabled:opacity-50"
+                          >
+                            {adding === item.skill ? "Ajout…" : "Je la maîtrise"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-good">Votre profil couvre toutes les compétences de cette offre.</p>
+                )}
+
+                {have.length > 0 ? (
+                  <div className="mt-5">
+                    <h3 className="text-sm font-semibold">Déjà dans votre profil</h3>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {have.map((item) => (
+                        <Pill key={item.skill} tone="good">
+                          ✓ {item.skill}
+                        </Pill>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {added.length > 0 ? (
+                  <p className="mt-4 text-sm text-sage">
+                    {added.length > 1 ? "Ces compétences sont ajoutées" : "Cette compétence est ajoutée"} à votre profil.{" "}
+                    <Link href="/candidat/cv-builder?step=competences" className="font-semibold text-forest hover:underline">
+                      Les mettre en valeur dans votre CV
+                    </Link>
+                  </p>
+                ) : null}
+              </>
             )}
-          </section>
+          </Card>
         ) : null}
 
         <section className="mt-8">
-          <h2 className="text-sm font-semibold">Face au marché</h2>
-          <ul className="mt-3 space-y-4">
-            {gaps.length === 0 ? <li className="text-sm text-sage">Aucun écart calculé pour le moment.</li> : null}
-            {gaps.map((gap) => (
-              <li key={gap.id}>
-                <div className="flex justify-between gap-3 text-sm">
-                  <span className="font-medium">{gap.skill}</span>
-                  <span className="text-sage">
-                    Vous {gap.currentLevel}% · marché {gap.marketLevel}%
-                  </span>
-                </div>
-                <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-paper">
-                  <div className="absolute h-full bg-line" style={{ width: `${gap.marketLevel}%` }} />
-                  <div className="absolute h-full bg-forest" style={{ width: `${gap.currentLevel}%` }} />
-                </div>
-                <p className="mt-1.5 text-sm text-sage">{gap.recommendedTraining}</p>
-              </li>
-            ))}
-          </ul>
+          <h2 className="text-lg font-semibold">Face au marché</h2>
+          <p className="mt-1 text-sm text-sage">Les écarts les plus importants d&apos;abord.</p>
+          <div className="mt-3 space-y-3">
+            {gaps === null ? (
+              <>
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+              </>
+            ) : null}
+            {gaps && gaps.length === 0 ? (
+              <EmptyState title="Aucun écart calculé" text="Ajoutez des compétences à votre profil ou déposez votre CV : nous les comparerons aux attentes du marché." href="/candidat/cv-builder?step=competences" cta="Compléter mes compétences" />
+            ) : null}
+            {ranked.map((gap) => {
+              const delta = gap.marketLevel - gap.currentLevel;
+              return (
+                <Card key={gap.id} className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold">{gap.skill}</p>
+                    <Pill tone={delta <= 0 ? "good" : delta < 25 ? "info" : "warn"}>{delta <= 0 ? "Au niveau du marché" : `${delta} points d'écart`}</Pill>
+                  </div>
+                  <div className="relative mt-3 h-2 overflow-hidden rounded-full bg-paper" aria-hidden>
+                    <div className="absolute h-full rounded-full bg-line" style={{ width: `${gap.marketLevel}%` }} />
+                    <div className="absolute h-full rounded-full bg-forest" style={{ width: `${gap.currentLevel}%` }} />
+                  </div>
+                  <p className="mt-1.5 text-xs text-sage">
+                    Vous : {gap.currentLevel} % · marché : {gap.marketLevel} %
+                  </p>
+                  {gap.recommendedTraining ? <p className="mt-2 text-sm leading-6">{gap.recommendedTraining}</p> : null}
+                </Card>
+              );
+            })}
+          </div>
         </section>
       </div>
     </AppShell>

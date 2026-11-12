@@ -70,7 +70,11 @@ export function AppShell({
   const pathname = usePathname();
   const [query, setQueryState] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // The menu is "open" only on the page where it was opened, so it closes by itself when the route changes.
+  const [menuPath, setMenuPath] = useState<string | null>(null);
+  const menuOpen = menuPath === pathname;
+  const setMenuOpen = (open: boolean | ((current: boolean) => boolean)) =>
+    setMenuPath((current) => ((typeof open === "function" ? open(current === pathname) : open) ? pathname : null));
   const searchRef = useRef<HTMLInputElement>(null);
 
   const setQuery = useCallback((value: string) => setQueryState(value), []);
@@ -83,10 +87,6 @@ export function AppShell({
     }
     if (user.role !== role) router.replace(homeFor(user.role));
   }, [loading, user, role, router]);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("q") ?? "";

@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { Card, ghostButton, PageHeader, Pill, primaryButton, ScoreRing, Skeleton } from "@/components/candidate-ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -50,7 +51,16 @@ export default function TestTakePage() {
     api<Assessment>(`/assessments/${params.id}`, { token }).then(setTest);
   }, [token, params.id]);
 
-  if (!test) return <AppShell role="CANDIDATE" title="Test">Chargement…</AppShell>;
+  if (!test) {
+    return (
+      <AppShell role="CANDIDATE" plain>
+        <div className="mx-auto max-w-3xl space-y-4">
+          <Skeleton className="h-10 w-2/3" />
+          <Skeleton className="h-48" />
+        </div>
+      </AppShell>
+    );
+  }
   if (test.kind === "code" || (test.challenges && test.challenges.length > 0)) {
     return <CodeLab test={test} token={token} onUpdate={setTest} />;
   }
@@ -105,25 +115,34 @@ function CodeLab({
   }
 
   return (
-    <AppShell role="CANDIDATE" title={test.title}>
-      <p className="text-sm text-forest/60">{test.jobTitle} · JavaScript · sandbox Node vm (timeout 400 ms / test)</p>
-      {done ? <p className="serif mt-4 text-5xl text-copper">{test.score}%</p> : null}
-      <div className="mt-6 space-y-6">
-        {(test.challenges ?? []).map((challenge) => {
+    <AppShell role="CANDIDATE" plain>
+      <div className="mx-auto max-w-3xl">
+      <PageHeader
+        title={test.title}
+        intro={`${test.jobTitle ? `${test.jobTitle} · ` : ""}JavaScript. Votre code s'exécute dans un bac à sable isolé (400 ms maximum par test).`}
+        action={done && test.score != null ? <ScoreRing value={test.score} size={72} label={`Résultat ${test.score} %`} /> : null}
+      />
+      <div className="space-y-5">
+        {(test.challenges ?? []).map((challenge, challengeIndex) => {
           const runResult = runs[challenge.id];
           const submitted = test.reports?.find((item) => item.challengeId === challenge.id);
           const results = submitted?.results ?? runResult?.results;
           return (
-            <section key={challenge.id} className="rounded-2xl border border-line bg-cream p-5">
-              <p className="text-xs uppercase tracking-widest text-copper">{challenge.competency}</p>
-              <h2 className="serif mt-1 text-2xl">{challenge.title}</h2>
-              <p className="mt-2 text-sm text-forest/80">{challenge.prompt}</p>
-              <p className="mt-3 text-xs text-forest/50">
-                Tests publics :{" "}
-                {challenge.publicTests
-                  .map((item) => `${challenge.functionName}(${item.args.map(preview).join(", ")}) → ${preview(item.expected)}`)
-                  .join(" · ")}
-              </p>
+            <Card key={challenge.id}>
+              <div className="flex items-center gap-2">
+                <Pill tone="info">Exercice {challengeIndex + 1}</Pill>
+                <Pill tone="neutral">{challenge.competency}</Pill>
+              </div>
+              <h2 className="mt-2 text-lg font-semibold">{challenge.title}</h2>
+              <p className="mt-1.5 text-sm leading-6 text-sage">{challenge.prompt}</p>
+              <div className="mt-3 rounded-xl bg-paper px-3 py-2 font-mono text-xs leading-5 text-sage">
+                <p className="mb-1 font-sans font-semibold text-ink">Exemples</p>
+                {challenge.publicTests.map((item) => (
+                  <p key={item.id} className="break-words">
+                    {challenge.functionName}({item.args.map(preview).join(", ")}) → {preview(item.expected)}
+                  </p>
+                ))}
+              </div>
               <textarea
                 value={sources[challenge.id] ?? ""}
                 disabled={done}
@@ -133,54 +152,57 @@ function CodeLab({
                   setSources((current) => ({ ...current, [challenge.id]: event.target.value }))
                 }
                 rows={12}
-                className="mt-4 w-full rounded-2xl border border-line bg-paper p-3 font-mono text-sm"
+                aria-label={`Code de l'exercice ${challengeIndex + 1}`}
+                className="mt-4 w-full resize-y rounded-xl border border-line bg-paper p-3 font-mono text-sm leading-6 outline-none transition focus:border-forest focus:ring-4 focus:ring-forest/10 disabled:opacity-80"
               />
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
                 {!done ? (
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => run(challenge.id)}
-                    className="rounded-full border border-line px-4 py-2 text-sm disabled:opacity-60"
-                  >
-                    {busy === challenge.id ? "Exécution…" : "Lancer les tests publics"}
+                  <button type="button" disabled={busy !== null} onClick={() => run(challenge.id)} className={ghostButton}>
+                    {busy === challenge.id ? "Exécution…" : "Lancer les exemples"}
                   </button>
                 ) : null}
                 {runResult ? (
-                  <p className="self-center text-sm">
-                    Publics {runResult.passed}/{runResult.total}
-                  </p>
+                  <Pill tone={runResult.passed === runResult.total ? "good" : "warn"}>
+                    Exemples : {runResult.passed}/{runResult.total}
+                  </Pill>
                 ) : null}
                 {submitted ? (
-                  <p className="self-center text-sm text-copper">
-                    Tous tests {submitted.passed}/{submitted.total}
-                  </p>
+                  <Pill tone={submitted.passed === submitted.total ? "good" : "warn"}>
+                    Tous les tests : {submitted.passed}/{submitted.total}
+                  </Pill>
                 ) : null}
               </div>
               {results?.length ? (
-                <ul className="mt-3 space-y-1 text-sm">
+                <ul className="mt-3 space-y-1.5 text-sm" aria-label="Résultats des tests">
                   {results.map((item) => (
-                    <li key={item.id} className={item.ok ? "text-good" : "text-copper"}>
-                      {item.ok ? "OK" : "KO"} · {item.public ? "public" : "caché"} {item.id}
-                      {item.error ? ` — ${item.error}` : ""}
+                    <li key={item.id} className={`flex flex-wrap items-baseline gap-2 ${item.ok ? "text-good" : "text-red-700"}`}>
+                      <span aria-hidden>{item.ok ? "✓" : "✗"}</span>
+                      <span className="font-medium">{item.ok ? "Réussi" : "Échec"}</span>
+                      <span className="text-sage">
+                        · {item.public ? "exemple" : "test caché"} {item.id}
+                        {item.error ? ` — ${item.error}` : ""}
+                      </span>
                     </li>
                   ))}
                 </ul>
               ) : null}
-            </section>
+            </Card>
           );
         })}
         {!done ? (
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={submit}
-            className="rounded-full bg-forest px-5 py-2 text-cream disabled:opacity-60"
-          >
-            {busy === "submit" ? "Correction…" : "Rendre le test (tests cachés inclus)"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" disabled={busy !== null} onClick={submit} className={primaryButton}>
+              {busy === "submit" ? "Correction…" : "Rendre le test"}
+            </button>
+            <p className="text-xs text-sage">Les tests cachés sont exécutés à ce moment. Une fois rendu, le test ne peut plus être modifié.</p>
+          </div>
         ) : null}
-        {error ? <p className="text-sm text-copper">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
+      </div>
       </div>
     </AppShell>
   );
@@ -199,6 +221,7 @@ function McqLab({
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const done = test.status === "COMPLETED";
+  const answered = picks.filter((value) => value >= 0).length;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -219,53 +242,96 @@ function McqLab({
   }
 
   return (
-    <AppShell role="CANDIDATE" title={test.title}>
-      <p className="text-sm text-forest/60">{test.jobTitle}</p>
-      {done ? <p className="serif mt-4 text-5xl text-copper">{test.score}%</p> : null}
-      <form onSubmit={onSubmit} className="mt-6 max-w-2xl space-y-6">
-        {test.questions.map((question, index) => (
-          <fieldset key={question.id} className="rounded-2xl border border-line bg-cream p-5">
-            <legend className="text-xs uppercase tracking-widest text-copper">{question.competency}</legend>
-            <p className="mt-2 font-medium">{question.prompt}</p>
-            <ul className="mt-3 space-y-2">
-              {question.choices.map((choice, choiceIndex) => {
-                const selected = picks[index] === choiceIndex;
-                const correct = done && question.correctIndex === choiceIndex;
-                return (
-                  <li key={choice}>
-                    <label
-                      className={`flex cursor-pointer gap-2 rounded-xl px-3 py-2 text-sm ${
-                        correct ? "bg-good/15" : selected ? "bg-paper" : ""
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name={question.id}
-                        disabled={done}
-                        checked={selected}
-                        onChange={() =>
-                          setPicks((current) => {
-                            const next = [...current];
-                            next[index] = choiceIndex;
-                            return next;
-                          })
-                        }
-                      />
-                      {choice}
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          </fieldset>
-        ))}
+    <AppShell role="CANDIDATE" plain>
+      <div className="mx-auto max-w-3xl">
+        <PageHeader
+          title={test.title}
+          intro={test.jobTitle ?? undefined}
+          action={done && test.score != null ? <ScoreRing value={test.score} size={72} label={`Résultat ${test.score} %`} /> : null}
+        />
         {!done ? (
-          <button disabled={pending} className="rounded-full bg-forest px-5 py-2 text-cream disabled:opacity-60">
-            {pending ? "Correction…" : "Rendre le test"}
-          </button>
+          <div className="mb-5" aria-live="polite">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">
+                {answered} réponse{answered > 1 ? "s" : ""} sur {test.questions.length}
+              </span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuenow={answered} aria-valuemin={0} aria-valuemax={test.questions.length}>
+              <div className="h-full rounded-full bg-forest transition-all duration-500" style={{ width: `${(answered / Math.max(1, test.questions.length)) * 100}%` }} />
+            </div>
+          </div>
         ) : null}
-        {error ? <p className="text-sm text-copper">{error}</p> : null}
-      </form>
+        {done && test.questions.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-line bg-paper/60 px-5 py-6 text-sm leading-6 text-sage">
+            Test terminé : votre résultat est enregistré et visible par le recruteur. Le détail des questions n&apos;est plus affiché.
+          </p>
+        ) : null}
+        <form onSubmit={onSubmit} className="space-y-5">
+          {test.questions.map((question, index) => (
+            <fieldset key={question.id} className="rounded-2xl border border-line bg-white p-5">
+              <legend className="sr-only">Question {index + 1}</legend>
+              <div className="flex items-center gap-2">
+                <Pill tone="info">Question {index + 1}</Pill>
+                <Pill tone="neutral">{question.competency}</Pill>
+              </div>
+              <p className="mt-2 font-semibold leading-6">{question.prompt}</p>
+              <ul className="mt-3 space-y-2">
+                {question.choices.map((choice, choiceIndex) => {
+                  const selected = picks[index] === choiceIndex;
+                  const correct = done && question.correctIndex === choiceIndex;
+                  const wrong = done && selected && question.correctIndex !== choiceIndex;
+                  return (
+                    <li key={choice}>
+                      <label
+                        className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 text-sm transition ${
+                          correct
+                            ? "border-good/40 bg-emerald-50"
+                            : wrong
+                              ? "border-red-300 bg-red-50"
+                              : selected
+                                ? "border-forest bg-tint"
+                                : "border-line hover:border-forest/40"
+                        } ${done ? "cursor-default" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name={question.id}
+                          disabled={done}
+                          checked={selected}
+                          className="mt-1 accent-[#1a3585]"
+                          onChange={() =>
+                            setPicks((current) => {
+                              const next = [...current];
+                              next[index] = choiceIndex;
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="min-w-0 flex-1">{choice}</span>
+                        {correct ? <span className="shrink-0 text-xs font-semibold text-good">Bonne réponse</span> : null}
+                        {wrong ? <span className="shrink-0 text-xs font-semibold text-red-700">Votre réponse</span> : null}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </fieldset>
+          ))}
+          {!done ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <button disabled={pending} className={primaryButton}>
+                {pending ? "Correction…" : "Rendre le test"}
+              </button>
+              <p className="text-xs text-sage">Une fois rendu, le test ne peut plus être modifié.</p>
+            </div>
+          ) : null}
+          {error ? (
+            <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
+          ) : null}
+        </form>
+      </div>
     </AppShell>
   );
 }
