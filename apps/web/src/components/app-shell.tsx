@@ -238,7 +238,7 @@ export function AppShell({
           </button>
         </aside>
 
-        <div className="min-h-[calc(100vh-3.5rem)] min-w-0 flex-1 overflow-hidden rounded-t-2xl bg-white md:my-2 md:mr-2 md:min-h-[calc(100vh-1rem)] md:rounded-2xl print:m-0 print:rounded-none">
+        <div className="min-h-[calc(100vh-3.5rem)] min-w-0 flex-1 overflow-clip rounded-t-2xl bg-white md:my-2 md:mr-2 md:min-h-[calc(100vh-1rem)] md:rounded-2xl print:m-0 print:rounded-none">
           {searchOpen ? (
             <header className="sticky top-14 z-20 border-b md:top-0 border-line bg-cream print:hidden">
               <form onSubmit={onSearch} className="mx-auto flex max-w-[1400px] items-center gap-4 px-4 py-3 md:px-8">

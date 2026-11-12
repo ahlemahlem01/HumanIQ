@@ -20,7 +20,18 @@ export type BannerSlide = {
  * Pauses on hover and keyboard focus, has a pause button, and does not autoplay
  * when the visitor prefers reduced motion.
  */
-export function BannerCarousel({ slides, interval = 6000 }: { slides: BannerSlide[]; interval?: number }) {
+export function BannerCarousel({
+  slides,
+  interval = 6000,
+  compact = false,
+  label = "À la une",
+}: {
+  slides: BannerSlide[];
+  interval?: number;
+  /** Smaller type and padding, for banners placed above a dense page. */
+  compact?: boolean;
+  label?: string;
+}) {
   const [index, setIndex] = useState(0);
   const [userPaused, setUserPaused] = useState(false);
   const [hovering, setHovering] = useState(false);
@@ -45,14 +56,14 @@ export function BannerCarousel({ slides, interval = 6000 }: { slides: BannerSlid
   return (
     <section
       aria-roledescription="carousel"
-      aria-label="À la une"
-      className="relative overflow-hidden rounded-3xl bg-forest text-white"
+      aria-label={label}
+      className={`relative overflow-hidden bg-forest text-white ${compact ? "rounded-2xl" : "rounded-3xl"}`}
       onPointerEnter={() => setHovering(true)}
       onPointerLeave={() => setHovering(false)}
       onFocus={() => setHovering(true)}
       onBlur={() => setHovering(false)}
     >
-      <div className="grid p-8 pb-16 md:p-10 md:pb-16" aria-live={paused ? "polite" : "off"}>
+      <div className={`grid ${compact ? "p-5 pb-12 md:p-6 md:pb-12" : "p-8 pb-16 md:p-10 md:pb-16"}`} aria-live={paused ? "polite" : "off"}>
         {slides.map((slide, position) => {
           const active = position === current;
           return (
@@ -68,18 +79,18 @@ export function BannerCarousel({ slides, interval = 6000 }: { slides: BannerSlid
               }`}
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white/80">{slide.kicker}</p>
-                <h2 className="mt-2 max-w-xl text-3xl font-bold leading-tight tracking-tight">{slide.title}</h2>
-                <p className="mt-2 max-w-lg text-white/80">{slide.body}</p>
+                <p className={`font-medium text-white/80 ${compact ? "text-xs" : "text-sm"}`}>{slide.kicker}</p>
+                <h2 className={`max-w-xl tracking-tight ${compact ? "mt-1 text-xl font-semibold leading-snug" : "mt-2 text-3xl font-bold leading-tight"}`}>{slide.title}</h2>
+                <p className={`max-w-lg text-white/80 ${compact ? "mt-1 text-sm leading-5" : "mt-2"}`}>{slide.body}</p>
                 {slide.primary || slide.secondary ? (
-                  <div className="mt-6 flex flex-wrap gap-3">
+                  <div className={`flex flex-wrap ${compact ? "mt-4 gap-2" : "mt-6 gap-3"}`}>
                     {slide.primary ? (
-                      <Link href={slide.primary.href} className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#0b1f4b] transition hover:scale-[1.03] active:scale-95">
+                      <Link href={slide.primary.href} className={`rounded-full bg-white font-semibold text-[#0b1f4b] transition hover:scale-[1.03] active:scale-95 ${compact ? "px-4 py-2 text-xs" : "px-6 py-3 text-sm"}`}>
                         {slide.primary.label}
                       </Link>
                     ) : null}
                     {slide.secondary ? (
-                      <Link href={slide.secondary.href} className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-95">
+                      <Link href={slide.secondary.href} className={`rounded-full border border-white/40 font-semibold text-white transition hover:bg-white/10 active:scale-95 ${compact ? "px-4 py-2 text-xs" : "px-6 py-3 text-sm"}`}>
                         {slide.secondary.label}
                       </Link>
                     ) : null}
@@ -87,12 +98,12 @@ export function BannerCarousel({ slides, interval = 6000 }: { slides: BannerSlid
                 ) : null}
               </div>
               <div
-                className={`hidden h-32 w-32 shrink-0 items-center justify-center rounded-3xl bg-white/10 md:flex ${
+                className={`hidden shrink-0 items-center justify-center bg-white/10 md:flex ${compact ? "h-20 w-20 rounded-2xl" : "h-32 w-32 rounded-3xl"} ${
                   active ? "animate-[bannerFloat_5s_ease-in-out_infinite] motion-reduce:animate-none" : ""
                 }`}
                 aria-hidden
               >
-                <svg viewBox="0 0 24 24" className="h-14 w-14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <svg viewBox="0 0 24 24" className={compact ? "h-9 w-9" : "h-14 w-14"} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
                   <path d={slide.icon} />
                 </svg>
               </div>
@@ -101,7 +112,7 @@ export function BannerCarousel({ slides, interval = 6000 }: { slides: BannerSlid
         })}
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 px-8 pb-5 md:px-10">
+      <div className={`absolute inset-x-0 bottom-0 flex items-center gap-3 ${compact ? "px-5 pb-3 md:px-6" : "px-8 pb-5 md:px-10"}`}>
         <div className="flex flex-1 items-center gap-2" role="tablist" aria-label="Choisir une diapositive">
           {slides.map((slide, position) => (
             <button
