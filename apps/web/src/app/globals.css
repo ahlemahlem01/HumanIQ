@@ -1,0 +1,190 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f4f7fb;
+  --ink: #0b1f4b;
+  --forest: #1a3585;
+  --forest-dark: #12275f;
+  --copper: #1a3585;
+  --tint: #eaf0fb;
+  --sage: #5c6d8a;
+  --cream: #ffffff;
+  --line: #d5deea;
+  --good: #0f6e56;
+  --warn: #b45309;
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-forest: var(--forest);
+  --color-forest-dark: var(--forest-dark);
+  --color-tint: var(--tint);
+  --color-copper: var(--copper);
+  --color-sage: var(--sage);
+  --color-cream: var(--cream);
+  --color-line: var(--line);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-inter);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+}
+
+h1,
+h2,
+h3,
+.serif {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+@layer base {
+  a {
+    color: inherit;
+  }
+}
+
+button.bg-forest:hover,
+a.bg-forest:hover {
+  background: var(--forest-dark);
+}
+
+::selection {
+  background: #d6e2f5;
+}
+
+@media print {
+  .app-shell {
+    display: block !important;
+  }
+  .cv-sheet {
+    border: 0 !important;
+    box-shadow: none !important;
+    max-width: none !important;
+  }
+}
+
+/* Micro-animations */
+@keyframes bannerProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes bannerFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-in {
+  /* `backwards` (not `both`): a lingering transform would trap position:fixed children. */
+  animation: pageIn 0.4s ease-out backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Sidebar: the active item gets a bar that grows in on mount */
+.rail-active::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #ffffff;
+  transform-origin: center;
+  animation: railIndicator 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes railIndicator {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes badgePop {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* CV Studio: print only the unscaled A4 sheet */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 0;
+  }
+  .cv-print > div {
+    width: 210mm !important;
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-top: 0 !important;
+    box-shadow: none !important;
+  }
+  .cv-placeholder {
+    display: none !important;
+  }
+}

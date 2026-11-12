@@ -1,0 +1,15 @@
+{
+  "name": "nextgen-hr",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run start:dev --prefix apps/api\" \"npm run dev --prefix apps/web\"",
+    "dev:api": "npm run start:dev --prefix apps/api",
+    "dev:web": "npm run dev --prefix apps/web",
+    "db:up": "docker compose up -d",
+    "db:migrate": "npm run prisma:migrate --prefix apps/api",
+    "db:seed": "npm run seed --prefix apps/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

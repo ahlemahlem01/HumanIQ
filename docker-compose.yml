@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: nextgen-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nextgen
+      POSTGRES_PASSWORD: nextgen
+      POSTGRES_DB: nextgen_hr
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextgen -d nextgen_hr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: nextgen-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: nextgen-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: nextgen_dev_master_key
+      MEILI_ENV: development
+    ports:
+      - "7701:7700"
+    volumes:
+      - meili_data:/meili_data
+
+volumes:
+  postgres_data:
+  meili_data:

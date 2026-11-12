@@ -1,0 +1,484 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum Role {
+  CANDIDATE
+  RECRUITER
+  ADMIN
+}
+
+enum JobStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  CLOSED
+}
+
+enum ApplicationStage {
+  SOURCING
+  PRESELECTION
+  INTERVIEW
+  TEST
+  OFFER
+  HIRED
+  REJECTED
+}
+
+enum Plan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum AssessmentType {
+  QCM
+  CODE
+  CULTURE
+  INTERVIEW
+}
+
+enum InterviewKind {
+  PRACTICE
+  SCREENING
+}
+
+enum InterviewStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PostKind {
+  POST
+  AD
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  role            Role
+  firstName       String
+  lastName        String
+  gdprConsentAt          DateTime?
+  marketingOptIn         Boolean   @default(false)
+  anonymizedAt           DateTime?
+  emailVerifiedAt        DateTime?
+  emailVerifyTokenHash   String?
+  emailVerifyExpiresAt   DateTime?
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  candidate       CandidateProfile?
+  recruiter       RecruiterProfile?
+  auditLogs       AuditLog[]
+  posts           Post[]
+  applicationNotes ApplicationNote[]
+  messages         Message[]
+  /// Email me when a new message is waiting (set to false to opt out).
+  messageEmails    Boolean   @default(true)
+  following       Follow[] @relation("Following")
+  followers       Follow[] @relation("Followers")
+  postLikes       PostLike[]
+  postComments    PostComment[]
+  postSaves       PostSave[]
+  postReposts     PostRepost[]
+  profileViews    ProfileView[]
+}
+
+model Company {
+  id                   String             @id @default(cuid())
+  name                 String
+  slug                 String             @unique
+  description          String?
+  website              String?
+  logoUrl              String?
+  plan                 Plan               @default(STARTER)
+  subscriptionStatus   String             @default("trialing")
+  seats                Int                @default(3)
+  recruiters           RecruiterProfile[]
+  jobs                 Job[]
+  conversations        Conversation[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+model RecruiterProfile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title       String?
+  bio         String?
+  location    String?
+  phone       String?
+  avatarImage String?
+  jobs        Job[]
+}
+
+model CandidateProfile {
+  id                 String         @id @default(cuid())
+  userId             String         @unique
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline           String?
+  bio                String?
+  location           String?
+  experienceYears    Int            @default(0)
+  skills             String[]
+  salaryMin          Int?
+  salaryMax          Int?
+  currency           String         @default("EUR")
+  reverseRecruiting  Boolean        @default(false)
+  anonymousVisible   Boolean        @default(true)
+  linkedinUrl        String?        @unique
+  source             String         @default("SELF")
+  sourcedAt          DateTime?
+  cvText             String?
+  cvFileName         String?
+  coverImage         String?
+  avatarImage        String?
+  cvMimeType         String?
+  cvPageCount        Int?
+  /// CV Studio preferences and extras (template, accent colour, contact details, languages, certifications).
+  cvSettings         Json?
+  applications       Application[]
+  skillGaps          SkillGap[]
+  interviews         InterviewSession[]
+  experiences        CandidateExperience[]
+  educations         CandidateEducation[]
+  projects           CandidateProject[]
+  profileViews       ProfileView[]
+  conversations      Conversation[]
+
+  /// Semantic profile vector. Only reachable through raw SQL (pgvector).
+  embedding          Unsupported("vector(1536)")?
+  embeddingModel     String?
+  embeddingUpdatedAt DateTime?
+}
+
+model CandidateExperience {
+  id          String           @id @default(cuid())
+  candidateId String
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  title       String
+  company     String
+  location    String?
+  startDate   DateTime
+  endDate     DateTime?
+  current     Boolean          @default(false)
+  description String?
+  createdAt   DateTime         @default(now())
+
+  @@index([candidateId, startDate])
+}
+
+model CandidateEducation {
+  id          String           @id @default(cuid())
+  candidateId String
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  school      String
+  degree      String?
+  field       String?
+  startDate   DateTime?
+  endDate     DateTime?
+  description String?
+  createdAt   DateTime         @default(now())
+
+  @@index([candidateId])
+}
+
+model CandidateProject {
+  id          String           @id @default(cuid())
+  candidateId String
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  name        String
+  url         String?
+  startDate   DateTime?
+  endDate     DateTime?
+  description String?
+  createdAt   DateTime         @default(now())
+
+  @@index([candidateId])
+}
+
+model Job {
+  id              String         @id @default(cuid())
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recruiterId     String
+  recruiter       RecruiterProfile @relation(fields: [recruiterId], references: [id])
+  title           String
+  slug            String         @unique
+  description     String
+  location        String
+  remote          Boolean        @default(false)
+  contractType    String         @default("CDI")
+  salaryMin       Int?
+  salaryMax       Int?
+  currency        String         @default("EUR")
+  requiredSkills  String[]
+  status          JobStatus      @default(DRAFT)
+  moderationNote  String?
+  applications    Application[]
+  interviews      InterviewSession[]
+  conversations   Conversation[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  /// Semantic job vector. Only reachable through raw SQL (pgvector).
+  embedding          Unsupported("vector(1536)")?
+  embeddingModel     String?
+  embeddingUpdatedAt DateTime?
+
+  @@index([status, createdAt])
+}
+
+model Application {
+  id                  String            @id @default(cuid())
+  jobId               String
+  job                 Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateId         String
+  candidate           CandidateProfile  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  stage               ApplicationStage  @default(SOURCING)
+  kanbanOrder         Int               @default(0)
+  atsScore            Int?
+  semanticScore       Int?
+  keywordScore        Int?
+  keywordSuggestions  String[]
+  coverNote           String?
+  assessments         Assessment[]
+  interviews          InterviewSession[]
+  notes               ApplicationNote[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([jobId, candidateId])
+  @@index([jobId, stage])
+}
+
+model Assessment {
+  id            String          @id @default(cuid())
+  applicationId String
+  application   Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          AssessmentType
+  title         String
+  score         Int?
+  maxScore      Int             @default(100)
+  payload       Json?
+  answers       Json?
+  status        String          @default("ASSIGNED")
+  completedAt   DateTime?
+  createdAt     DateTime        @default(now())
+}
+
+model InterviewSession {
+  id             String           @id @default(cuid())
+  candidateId    String
+  candidate      CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId          String?
+  job            Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  applicationId  String?
+  application    Application?     @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  kind           InterviewKind    @default(PRACTICE)
+  status         InterviewStatus  @default(IN_PROGRESS)
+  currentIndex   Int              @default(0)
+  overallScore   Int?
+  summary        String?
+  turns          InterviewTurn[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model InterviewTurn {
+  id              String            @id @default(cuid())
+  sessionId       String
+  session         InterviewSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  index           Int
+  competency      String
+  question        String
+  expectedSignals String[]
+  answer          String?
+  score           Int?
+  feedback        String?
+  answeredAt      DateTime?
+}
+
+model SkillGap {
+  id                    String           @id @default(cuid())
+  candidateId           String
+  candidate             CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  skill                 String
+  currentLevel          Int
+  marketLevel           Int
+  recommendedTraining   String
+}
+
+model SalaryBenchmark {
+  id        String @id @default(cuid())
+  role      String
+  tech      String
+  location  String
+  p25       Int
+  p50       Int
+  p75       Int
+  currency  String @default("EUR")
+
+  @@unique([role, tech, location])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  follower    User     @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  kind      PostKind @default(POST)
+  createdAt DateTime @default(now())
+
+  likes    PostLike[]
+  comments PostComment[]
+  saves    PostSave[]
+  reposts  PostRepost[]
+
+  @@index([authorId, createdAt])
+  @@index([kind, createdAt])
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  body      String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model PostSave {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model PostRepost {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model ProfileView {
+  id          String           @id @default(cuid())
+  candidateId String
+  viewerId    String
+  count       Int              @default(1)
+  viewedAt    DateTime         @default(now())
+  candidate   CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  viewer      User             @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, viewerId])
+  @@index([candidateId, viewedAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+/// Internal notes the recruiting team leaves on an application (never shown to the candidate).
+model ApplicationNote {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body          String
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId, createdAt])
+}
+
+/// One thread per (company, candidate): the whole recruiting team talks to the same person.
+model Conversation {
+  id              String           @id @default(cuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  candidateId     String
+  candidate       CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// Job the conversation is currently about (shown as context, optional).
+  jobId           String?
+  job             Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  messages        Message[]
+  /// Last time each side opened the thread: anything newer from the other side is unread.
+  recruiterReadAt DateTime?
+  candidateReadAt DateTime?
+  /// Last email sent to each side about unread messages (used to avoid spamming).
+  recruiterNotifiedAt DateTime?
+  candidateNotifiedAt DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([companyId, candidateId])
+  @@index([companyId, updatedAt])
+  @@index([candidateId, updatedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "HumanIQ — Import LinkedIn",
+  "version": "0.1.0",
+  "description": "Importe un profil LinkedIn ouvert dans le pipeline Kanban HumanIQ.",
+  "action": {
+    "default_title": "Importer dans HumanIQ",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "http://localhost:4100/*",
+    "http://localhost:3100/*",
+    "https://www.linkedin.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/in/*",
+        "http://localhost:3100/demo/linkedin*",
+        "http://localhost:3100/demo/linkedin/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>HumanIQ sourcing</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <p class="brand">HumanIQ</p>
+      <p class="sub">Import LinkedIn → Kanban</p>
+    </header>
+    <p id="status" class="status"></p>
+    <form id="login" class="panel">
+      <label>E-mail recruteur <input name="email" type="email" value="recruteur@atlas.tech" required /></label>
+      <label>Mot de passe <input name="password" type="password" value="Demo1234!" required /></label>
+      <button type="submit">Connexion</button>
+    </form>
+    <div id="workspace" class="panel hidden">
+      <p id="who" class="muted"></p>
+      <label>
+        Offre cible
+        <select id="job"></select>
+      </label>
+      <pre id="preview" class="preview">Ouvrez un profil LinkedIn, ou la page démo HumanIQ.</pre>
+      <button id="import" type="button">Importer dans le pipeline</button>
+      <button id="logout" class="ghost" type="button">Déconnexion</button>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

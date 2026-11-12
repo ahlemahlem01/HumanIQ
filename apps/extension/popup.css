@@ -1,0 +1,95 @@
+:root {
+  --paper: #f4f7fb;
+  --ink: #0b1f4b;
+  --forest: #0b1f4b;
+  --copper: #0b1f4b;
+  --cream: #ffffff;
+  --line: #d5deea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 320px;
+  font: 13px/1.45 system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+header {
+  background: var(--forest);
+  color: var(--cream);
+  padding: 12px 14px;
+}
+
+.brand {
+  margin: 0;
+  font-size: 18px;
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.sub,
+.muted,
+.status {
+  margin: 4px 0 0;
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.status {
+  padding: 8px 14px 0;
+  color: var(--copper);
+}
+
+.panel {
+  padding: 12px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hidden {
+  display: none;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+input,
+select,
+button,
+.preview {
+  font: inherit;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  background: var(--cream);
+}
+
+button {
+  background: var(--copper);
+  color: var(--cream);
+  border: 0;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--forest);
+  border: 1px solid var(--line);
+}
+
+.preview {
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 11px;
+  margin: 0;
+}
