@@ -3,6 +3,7 @@ import * as bcrypt from "bcryptjs";
 import { LocalEmbeddingProvider } from "../src/ai/providers/local-embedding.provider";
 import { OpenAIEmbeddingProvider } from "../src/ai/providers/openai-embedding.provider";
 import { toPgVector } from "../src/ai/providers/types";
+import { demoPassword, espritPassword } from "./seed-env";
 
 const prisma = new PrismaClient();
 
@@ -101,7 +102,7 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.salaryBenchmark.deleteMany();
 
-  const password = await bcrypt.hash("Demo1234!", 10);
+  const password = await bcrypt.hash(demoPassword(), 10);
 
   const admin = await prisma.user.create({
     data: {
@@ -240,7 +241,8 @@ async function main() {
     },
   });
 
-  const espritPassword = await bcrypt.hash("boss@1234", 10);
+  const espritSecret = espritPassword();
+  const espritHash = await bcrypt.hash(espritSecret.value, 10);
   const esprit = await prisma.company.create({
     data: {
       name: "ESPRIT",
@@ -254,7 +256,7 @@ async function main() {
     data: {
       email: "ahlem.alaya@esprit.tn",
       messageEmails: false,
-      passwordHash: espritPassword,
+      passwordHash: espritHash,
       role: "RECRUITER",
       firstName: "Ahlem",
       lastName: "Alaya",
@@ -334,10 +336,14 @@ async function main() {
 
   await embedEverything();
 
-  console.log("Seed OK — comptes démo (mot de passe Demo1234!)");
+  console.log("Seed OK — comptes démo (mot de passe : SEED_DEMO_PASSWORD, par défaut Demo1234!)");
   console.log("  admin@nextgen.hr");
   console.log("  recruteur@atlas.tech");
   console.log("  candidat@mail.com");
+  console.log("  ahlem.alaya@esprit.tn");
+  if (espritSecret.generated) {
+    console.log(`  Mot de passe généré pour ahlem.alaya@esprit.tn (affiché une seule fois) : ${espritSecret.value}`);
+  }
 }
 
 /** Builds pgvector embeddings for every seeded job and candidate. */

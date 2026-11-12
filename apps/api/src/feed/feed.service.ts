@@ -132,9 +132,15 @@ export class FeedService {
   private async toggle(userId: string, postId: string, model: "postLike" | "postSave" | "postRepost") {
     await this.ownPost(postId);
     const where = { postId_userId: { postId, userId } };
-    const existing = await this.prisma[model].findUnique({ where });
-    if (existing) await this.prisma[model].delete({ where });
-    else await this.prisma[model].create({ data: { postId, userId } });
+    // The three tables share the same shape; one explicit type keeps the calls type-safe without a union of delegates.
+    const table = this.prisma[model] as unknown as {
+      findUnique(args: { where: typeof where }): Promise<unknown>;
+      delete(args: { where: typeof where }): Promise<unknown>;
+      create(args: { data: { postId: string; userId: string } }): Promise<unknown>;
+    };
+    const existing = await table.findUnique({ where });
+    if (existing) await table.delete({ where });
+    else await table.create({ data: { postId, userId } });
     return (await this.stats(userId, [postId])).get(postId);
   }
 

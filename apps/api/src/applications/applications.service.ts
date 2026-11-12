@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { ApplicationStage } from "@prisma/client";
+import { ApplicationStage, AssessmentType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { EmbeddingsService } from "../ai/embeddings.service";
 import { blendScores, scoreCvAgainstJob } from "../ai/matching";
@@ -247,7 +247,7 @@ export class ApplicationsService {
   async addAssessment(
     applicationId: string,
     recruiterId: string,
-    data: { type: "QCM" | "CODE" | "CULTURE"; title: string; score?: number },
+    data: { type: AssessmentType; title: string; score?: number },
   ) {
     const application = await this.prisma.application.findUnique({
       where: { id: applicationId },

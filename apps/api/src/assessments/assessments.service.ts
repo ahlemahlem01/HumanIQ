@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { cultureQuestionnaire, qcmForSkills, scoreMcq, type McqQuestion } from "./bank";
 import { codeChallengesForSkills, stripHidden, type CodeChallenge } from "./code-challenges";
@@ -6,6 +7,10 @@ import { judgeChallenge } from "./code-runner";
 import { companyIdOf } from "../recruiters/company-scope";
 
 type CodePayload = { kind: "code"; language: "javascript"; challenges: CodeChallenge[] };
+
+/** Challenges are plain data (strings, numbers, arrays), so they are valid JSON for the payload column. */
+const codePayload = (challenges: CodeChallenge[]) =>
+  ({ kind: "code", language: "javascript", challenges }) as unknown as Prisma.InputJsonValue;
 
 @Injectable()
 export class AssessmentsService {
@@ -44,7 +49,7 @@ export class AssessmentsService {
           where: { id: openCode.id },
           data: {
             title: "Test de code interactif",
-            payload: { kind: "code", language: "javascript", challenges },
+            payload: codePayload(challenges),
           },
         }),
       );
@@ -186,7 +191,7 @@ export class AssessmentsService {
         type: "CODE",
         title: "Test de code interactif",
         status: "ASSIGNED",
-        payload: { kind: "code", language: "javascript", challenges },
+        payload: codePayload(challenges),
       },
     });
   }
@@ -201,7 +206,7 @@ export class AssessmentsService {
       payload: unknown;
       answers: unknown;
       completedAt: Date | null;
-      application?: { job?: { title?: string } };
+      application?: { job?: { title?: string } } & Record<string, unknown>;
     },
     opts: { hideAnswers: boolean },
   ) {

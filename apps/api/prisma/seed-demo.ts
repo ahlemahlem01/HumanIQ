@@ -8,6 +8,7 @@
  */
 import { ApplicationStage, PrismaClient } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
+import { demoPassword } from "./seed-env";
 
 const prisma = new PrismaClient();
 const DOMAIN = "demo.humaniq.test";
@@ -89,7 +90,7 @@ async function add() {
   }
 
   const random = rng(20261111);
-  const passwordHash = await bcrypt.hash("Demo1234!", 10);
+  const passwordHash = await bcrypt.hash(demoPassword(), 10);
   const now = Date.now();
   let created = 0;
   let applications = 0;

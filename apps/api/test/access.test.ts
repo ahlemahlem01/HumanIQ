@@ -143,7 +143,7 @@ describe("isolation between companies", () => {
   it("refuses to read or move another company's applications", async (t) => {
     if (!needsApi(t)) return;
     assert.equal((await call(`/applications/${atlasApplicationId}/notes`, { token: tokens.esprit })).status, 403);
-    const move = await call(`/applications/${atlasApplicationId}/move`, { method: "PATCH", token: tokens.esprit, body: { stage: "SOURCING" } });
+    const move = await call(`/applications/${atlasApplicationId}/move`, { method: "PATCH", token: tokens.esprit, body: { stage: "SOURCING", kanbanOrder: 0 } });
     assert.equal(move.status, 403);
   });
 
