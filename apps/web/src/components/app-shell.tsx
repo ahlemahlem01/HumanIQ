@@ -216,13 +216,6 @@ export function AppShell({
           >
             <Logo size={52} />
           </Link>
-          <Link
-            href={profileHref}
-            aria-label="Profil"
-            className="mx-auto mt-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-[11px] font-semibold text-white ring-1 ring-white/30"
-          >
-            {initial}
-          </Link>
           <nav className="mt-4 flex min-h-0 flex-1 flex-col justify-evenly overflow-hidden px-2">
             <button type="button" onClick={openSearch} className={railClass(searchOpen)}>
               <Icon name="search" className={RAIL_ICON} />
