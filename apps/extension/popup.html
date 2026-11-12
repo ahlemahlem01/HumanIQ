@@ -2,30 +2,23 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <title>HumanIQ sourcing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HumanIQ — Sourcing</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <header>
-      <p class="brand">HumanIQ</p>
-      <p class="sub">Import LinkedIn → Kanban</p>
+    <header class="top">
+      <img src="icons/icon48.png" alt="" width="28" height="28" />
+      <div class="brand">
+        <strong>HumanIQ</strong>
+        <span>Sourcing</span>
+      </div>
+      <button id="settings-toggle" class="icon-btn" type="button" aria-label="Réglages" title="Réglages">⚙</button>
     </header>
-    <p id="status" class="status"></p>
-    <form id="login" class="panel">
-      <label>E-mail recruteur <input name="email" type="email" value="recruteur@atlas.tech" required /></label>
-      <label>Mot de passe <input name="password" type="password" value="Demo1234!" required /></label>
-      <button type="submit">Connexion</button>
-    </form>
-    <div id="workspace" class="panel hidden">
-      <p id="who" class="muted"></p>
-      <label>
-        Offre cible
-        <select id="job"></select>
-      </label>
-      <pre id="preview" class="preview">Ouvrez un profil LinkedIn, ou la page démo HumanIQ.</pre>
-      <button id="import" type="button">Importer dans le pipeline</button>
-      <button id="logout" class="ghost" type="button">Déconnexion</button>
-    </div>
+
+    <main id="app" aria-live="polite"></main>
+
+    <script src="extract.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
