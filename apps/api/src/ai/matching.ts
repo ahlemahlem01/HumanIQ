@@ -133,10 +133,10 @@ export function inferExperienceYears(text: string) {
 function mentionsSkill(haystack: string, skills: string[], skill: string) {
   const needle = normalize(skill);
   if (skills.some((candidate) => normalize(candidate) === needle)) return true;
-  if (normalize(haystack).includes(needle)) return true;
-  return (SKILL_ALIASES[skill] ?? []).some((alias) =>
-    normalize(haystack).includes(normalize(alias)),
-  );
+  // Whole-word match: "Go" must not be found in "good", nor "Java" in "JavaScript".
+  const text = normalize(haystack);
+  if (hasTerm(text, needle)) return true;
+  return (SKILL_ALIASES[skill] ?? []).some((alias) => hasTerm(text, normalize(alias)));
 }
 
 function normalize(value: string) {

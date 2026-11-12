@@ -10,7 +10,8 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
-    "seed:demo:remove": "tsx prisma/seed-demo.ts --remove"
+    "seed:demo:remove": "tsx prisma/seed-demo.ts --remove",
+    "test": "node --import tsx --test \"test/*.test.ts\""
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

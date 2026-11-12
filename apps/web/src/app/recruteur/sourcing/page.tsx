@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { AppShell, useShellSearch } from "@/components/app-shell";
+import { SourcedNote } from "@/components/sourced-note";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -407,6 +408,7 @@ export default function SourcingPage() {
             </button>
             {error ? <p className="text-sm text-red-700">{error}</p> : null}
             {ok ? <p className="text-sm text-good">{ok}</p> : null}
+            <SourcedNote />
           </form>
 
           <section className="rounded-2xl border border-line bg-cream p-5">

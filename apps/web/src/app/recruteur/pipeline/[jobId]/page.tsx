@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { isSourced, SourcedNote } from "@/components/sourced-note";
 import { api, STAGE_LABEL } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -43,6 +44,7 @@ type Card = {
   keywordSuggestions: string[];
   candidate: {
     id: string;
+    source?: string | null;
     user: { firstName: string; lastName: string; email: string };
   };
   assessments: Assessment[];
@@ -363,14 +365,20 @@ export default function PipelinePage() {
                 <h2 className="truncate text-xl font-semibold">
                   {open.candidate.user.firstName} {open.candidate.user.lastName}
                 </h2>
-                <p className="truncate text-sm text-sage">{open.candidate.user.email}</p>
+                {isSourced(open.candidate.source) ? (
+                  <SourcedNote className="mt-1" />
+                ) : (
+                  <p className="truncate text-sm text-sage">{open.candidate.user.email}</p>
+                )}
                 <p className="mt-1 text-xs font-medium text-forest">Étape : {STAGE_LABEL[open.stage] ?? open.stage}</p>
-                <Link
-                  href={`/recruteur/messages?candidate=${open.candidate.id}&job=${params.jobId}`}
-                  className="mt-2 inline-block rounded-full bg-forest px-4 py-1.5 text-xs font-semibold text-white"
-                >
-                  Écrire au candidat
-                </Link>
+                {isSourced(open.candidate.source) ? null : (
+                  <Link
+                    href={`/recruteur/messages?candidate=${open.candidate.id}&job=${params.jobId}`}
+                    className="mt-2 inline-block rounded-full bg-forest px-4 py-1.5 text-xs font-semibold text-white"
+                  >
+                    Écrire au candidat
+                  </Link>
+                )}
               </div>
               <MiniRing value={open.atsScore} />
               <button
