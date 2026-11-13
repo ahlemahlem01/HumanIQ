@@ -1,10 +1,11 @@
 import { mkdir, unlink, writeFile } from "fs/promises";
 import { join } from "path";
-import { BadRequestException, ForbiddenException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Logger, ForbiddenException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "../auth/auth.service";
+import { MailService } from "../auth/mail.service";
 import { resolveTxt } from "dns/promises";
 import { companyIdOf } from "./company-scope";
 
@@ -18,6 +19,8 @@ const IMAGE_TYPES: Record<string, string> = {
 
 @Injectable()
 export class RecruitersService {
+  private readonly logger = new Logger(RecruitersService.name);
+
   /** Identity, domain and members are managed by the owner of the company only. */
   private async assertOwner(recruiterId: string) {
     const row = await this.prisma.recruiterProfile.findUnique({ where: { id: recruiterId }, select: { memberRole: true } });
@@ -27,6 +30,7 @@ export class RecruitersService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(AuthService) private auth: AuthService,
+    @Inject(MailService) private mail: MailService,
   ) {}
 
   async team(recruiterId: string) {
@@ -243,7 +247,7 @@ export class RecruitersService {
     const companyId = await companyIdOf(this.prisma, recruiterId);
     const member = await this.prisma.recruiterProfile.findFirst({
       where: { id: memberId, companyId, memberStatus: "PENDING" },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, user: { select: { firstName: true, email: true } }, company: { select: { name: true } } },
     });
     if (!member) throw new NotFoundException("Demande introuvable.");
     if (accept) {
@@ -253,6 +257,9 @@ export class RecruitersService {
       ]);
       if (count >= company.seats) throw new BadRequestException(`Tous les sièges sont utilisés (${count} sur ${company.seats}).`);
       await this.prisma.recruiterProfile.update({ where: { id: member.id }, data: { memberStatus: "ACTIVE" } });
+      void this.mail
+        .sendJoinAccepted(member.user.email, member.user.firstName, member.company.name, `${process.env.FRONTEND_URL ?? "http://localhost:3100"}/recruteur`)
+        .catch((err) => this.logger.warn(`Join accepted e-mail failed: ${err instanceof Error ? err.message : err}`));
     } else {
       // Refused: the account is removed (it never had access to anything).
       await this.prisma.user.delete({ where: { id: member.userId } });
@@ -323,6 +330,12 @@ export class RecruitersService {
     await this.prisma.company.update({ where: { id: companyId }, data: { domainVerifiedAt: now, verifiedAt: now } });
     const recruiter = await this.prisma.recruiterProfile.findUnique({ where: { id: recruiterId }, select: { userId: true } });
     await this.prisma.auditLog.create({ data: { actorId: recruiter?.userId, action: "COMPANY_DOMAIN_VERIFIED", entity: "Company", entityId: companyId } });
+    const owner = await this.prisma.recruiterProfile.findUnique({ where: { id: recruiterId }, select: { user: { select: { firstName: true, email: true } }, company: { select: { name: true } } } });
+    if (owner) {
+      void this.mail
+        .sendDomainVerified(owner.user.email, owner.user.firstName, owner.company.name, company.domain, `${process.env.FRONTEND_URL ?? "http://localhost:3100"}/recruteur`)
+        .catch((err) => this.logger.warn(`Domain verified e-mail failed: ${err instanceof Error ? err.message : err}`));
+    }
     return this.verificationState(companyId);
   }
 

@@ -64,6 +64,68 @@ export class MailService {
     });
   }
 
+  /** To the owner(s) of a company: someone with the company's e-mail domain asks to join it. */
+  async sendJoinRequest(to: string, firstName: string, applicantName: string, applicantEmail: string, companyName: string, url: string) {
+    await this.send({
+      to,
+      subject: `${applicantName} demande à rejoindre ${companyName} sur HumanIQ`,
+      text: [
+        `Bonjour ${firstName},`,
+        "",
+        `${applicantName} (${applicantEmail}) s'est inscrit avec l'adresse e-mail de votre entreprise et demande l'accès à l'espace de recrutement de ${companyName}.`,
+        "Acceptez la demande seulement si cette personne doit recruter pour vous. Sinon, refusez-la.",
+        "",
+        url,
+      ].join("\n"),
+      html: layout(
+        `Bonjour ${escapeHtml(firstName)}, <strong>${escapeHtml(applicantName)}</strong> (${escapeHtml(applicantEmail)}) s'est inscrit avec l'adresse e-mail de votre entreprise et demande l'accès à l'espace de recrutement de ${escapeHtml(companyName)}. Acceptez la demande seulement si cette personne doit recruter pour vous.`,
+        "Voir la demande",
+        url,
+      ),
+    });
+  }
+
+  /** To the owner: the DNS proof was found, the company is validated. */
+  async sendDomainVerified(to: string, firstName: string, companyName: string, domain: string, url: string) {
+    await this.send({
+      to,
+      subject: `${companyName} est vérifiée sur HumanIQ`,
+      text: [
+        `Bonjour ${firstName},`,
+        "",
+        `Le domaine ${domain} est vérifié : ${companyName} est validée.`,
+        "Votre équipe peut maintenant consulter la CVthèque, le vivier et écrire aux candidats.",
+        "",
+        url,
+      ].join("\n"),
+      html: layout(
+        `Bonjour ${escapeHtml(firstName)}, le domaine <strong>${escapeHtml(domain)}</strong> est vérifié : ${escapeHtml(companyName)} est validée. Votre équipe peut maintenant consulter la CVthèque, le vivier et écrire aux candidats.`,
+        "Ouvrir HumanIQ",
+        url,
+      ),
+    });
+  }
+
+  /** To a recruiter whose request to join a company has been accepted. */
+  async sendJoinAccepted(to: string, firstName: string, companyName: string, url: string) {
+    await this.send({
+      to,
+      subject: `Votre accès à ${companyName} est ouvert`,
+      text: [
+        `Bonjour ${firstName},`,
+        "",
+        `Le responsable de ${companyName} a accepté votre demande : vous pouvez utiliser l'espace de recrutement.`,
+        "",
+        url,
+      ].join("\n"),
+      html: layout(
+        `Bonjour ${escapeHtml(firstName)}, le responsable de ${escapeHtml(companyName)} a accepté votre demande : vous pouvez maintenant utiliser l'espace de recrutement.`,
+        "Ouvrir HumanIQ",
+        url,
+      ),
+    });
+  }
+
   async sendMessageNotification(
     to: string,
     input: { firstName: string; fromName: string; context?: string; preview: string; url: string },

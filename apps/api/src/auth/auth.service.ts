@@ -78,6 +78,7 @@ export class AuthService {
     await this.prisma.auditLog.create({
       data: { actorId: user.id, action: "REGISTER", entity: "User", entityId: user.id },
     });
+    if (existingCompany) void this.alertOwnersOfJoinRequest(existingCompany.id, user);
 
     const verification = await this.issueVerification(user.id, user.email, user.firstName);
     return { verificationRequired: true as const, email: user.email, ...verification };
@@ -153,6 +154,26 @@ export class AuthService {
       // Never expose the link in production: it would let anyone confirm an address that is not theirs.
       if (!exposeFallbackLinks()) return { delivered: false, detail: "L'e-mail de confirmation n'a pas pu être envoyé. Réessayez dans quelques minutes." };
       return { delivered: false, verifyPath: `/verifier?token=${token}`, detail };
+    }
+  }
+
+  /** E-mails the owner(s) of the company about a new join request. Never blocks or fails the sign-up. */
+  private async alertOwnersOfJoinRequest(companyId: string, applicant: { firstName: string; lastName: string; email: string }) {
+    try {
+      const owners = await this.prisma.recruiterProfile.findMany({
+        where: { companyId, memberRole: "OWNER", memberStatus: "ACTIVE" },
+        select: { company: { select: { name: true } }, user: { select: { firstName: true, email: true } } },
+      });
+      const url = `${process.env.FRONTEND_URL ?? "http://localhost:3100"}/recruteur/equipe`;
+      await Promise.all(
+        owners.map((owner) =>
+          this.mail
+            .sendJoinRequest(owner.user.email, owner.user.firstName, `${applicant.firstName} ${applicant.lastName}`, applicant.email, owner.company.name, url)
+            .catch((err) => this.logger.warn(`Join request e-mail failed: ${err instanceof Error ? err.message : err}`)),
+        ),
+      );
+    } catch (err) {
+      this.logger.warn(`Join request alert skipped: ${err instanceof Error ? err.message : err}`);
     }
   }
 
