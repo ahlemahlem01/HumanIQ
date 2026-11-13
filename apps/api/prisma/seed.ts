@@ -140,7 +140,7 @@ async function main() {
       lastName: "Ben Ali",
       gdprConsentAt: new Date(),
       recruiter: {
-        create: { companyId: company.id, title: "Talent Lead" },
+        create: { companyId: company.id, title: "Talent Lead", memberRole: "OWNER" },
       },
     },
     include: { recruiter: true },
@@ -265,7 +265,7 @@ async function main() {
       lastName: "Alaya",
       gdprConsentAt: new Date(),
       emailVerifiedAt: new Date(),
-      recruiter: { create: { companyId: esprit.id, title: "Recruteuse" } },
+      recruiter: { create: { companyId: esprit.id, title: "Recruteuse", memberRole: "OWNER" } },
     },
     include: { recruiter: true },
   });

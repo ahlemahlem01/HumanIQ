@@ -14,9 +14,12 @@ type Member = {
   avatarImage: string | null;
   me: boolean;
   pending: boolean;
+  role?: "OWNER" | "MEMBER";
 };
 
-type Team = { company: { name: string; seats: number }; members: Member[] };
+type JoinRequest = { id: string; name: string; email: string; requestedAt: string };
+
+type Team = { company: { name: string; seats: number }; isOwner?: boolean; members: Member[] };
 
 type InviteResult = {
   member: Member;
@@ -35,10 +38,24 @@ export default function TeamPage() {
   const [notice, setNotice] = useState("");
   const [fallbackLink, setFallbackLink] = useState("");
   const [pending, setPending] = useState(false);
+  const [requests, setRequests] = useState<JoinRequest[]>([]);
 
   async function load() {
     if (!token) return;
-    setTeam(await api<Team>("/recruiters/team", { token }));
+    const loaded = await api<Team>("/recruiters/team", { token });
+    setTeam(loaded);
+    setRequests(loaded.isOwner ? await api<JoinRequest[]>("/recruiters/team/requests", { token }).catch(() => []) : []);
+  }
+
+  async function decide(id: string, accept: boolean) {
+    if (!token) return;
+    setError("");
+    try {
+      await api(`/recruiters/team/requests/${id}`, { method: "POST", token, body: { accept } });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action impossible.");
+    }
   }
 
   useEffect(() => {
@@ -110,6 +127,31 @@ export default function TeamPage() {
             </div>
           </div>
 
+          {requests.length > 0 ? (
+            <section className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <h2 className="font-semibold text-warn">Demandes d&apos;accès ({requests.length})</h2>
+              <p className="mt-1 text-xs leading-5 text-warn">
+                Ces personnes se sont inscrites avec l&apos;adresse e-mail de votre entreprise. Acceptez seulement celles qui doivent recruter pour vous.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {requests.map((request) => (
+                  <li key={request.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-white px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{request.name}</p>
+                      <p className="truncate text-xs text-sage">{request.email}</p>
+                    </div>
+                    <button type="button" onClick={() => void decide(request.id, true)} className="rounded-full bg-forest px-4 py-1.5 text-sm font-semibold text-white">
+                      Accepter
+                    </button>
+                    <button type="button" onClick={() => void decide(request.id, false)} className="rounded-full border border-line px-4 py-1.5 text-sm font-semibold hover:border-red-300 hover:text-red-700">
+                      Refuser
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <ul className="mt-4 overflow-hidden rounded-2xl border border-line bg-white">
             {team === null && !error ? <li className="p-6 text-sm text-sage">Chargement…</li> : null}
             {team?.members.map((member) => (
@@ -125,6 +167,7 @@ export default function TeamPage() {
                   <p className="truncate font-semibold">
                     {member.firstName} {member.lastName}
                     {member.me ? <span className="ml-2 rounded-full bg-tint px-2 py-0.5 text-xs font-semibold text-forest">Vous</span> : null}
+                    {member.role === "OWNER" ? <span className="ml-2 rounded-full bg-paper px-2 py-0.5 text-xs font-semibold text-sage">Responsable</span> : null}
                   </p>
                   <p className="truncate text-sm text-sage">{member.title || "Recruteur"}</p>
                   <p className="truncate text-xs text-sage">{member.email}</p>
@@ -141,7 +184,12 @@ export default function TeamPage() {
         </div>
 
         <aside className="space-y-3 lg:sticky lg:top-20">
-          <form onSubmit={invite} className="space-y-3 rounded-2xl border border-line bg-cream p-5">
+          {team && !team.isOwner ? (
+            <p className="rounded-2xl border border-line bg-cream p-5 text-sm leading-6 text-sage">
+              Seul le responsable de l&apos;entreprise peut inviter des collègues et accepter les demandes d&apos;accès.
+            </p>
+          ) : null}
+          <form onSubmit={invite} hidden={Boolean(team && !team.isOwner)} className="space-y-3 rounded-2xl border border-line bg-cream p-5">
             <h2 className="text-lg font-semibold">Inviter un collègue</h2>
             <p className="text-xs leading-5 text-sage">
               Il reçoit un e-mail avec un lien pour choisir son mot de passe (valable 7 jours).

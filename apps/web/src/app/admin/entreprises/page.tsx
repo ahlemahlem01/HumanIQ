@@ -11,6 +11,8 @@ type Company = {
   name: string;
   website: string | null;
   logoUrl: string | null;
+  domain: string | null;
+  domainVerifiedAt: string | null;
   description: string | null;
   createdAt: string;
   verifiedAt: string | null;
@@ -71,6 +73,7 @@ export default function CompaniesPage() {
                 <p className="mt-1 text-xs text-sage">
                   Inscrite le {new Date(company.createdAt).toLocaleDateString("fr-FR")} · {company.jobs} offre{company.jobs > 1 ? "s" : ""}
                   {company.website ? ` · ${company.website}` : ""}
+                  {company.domain ? ` · domaine ${company.domain}${company.domainVerifiedAt ? " ✓ prouvé (DNS)" : " non prouvé"}` : ""}
                 </p>
                 {company.description ? <p className="mt-2 line-clamp-2 text-sm text-sage">{company.description}</p> : null}
                 <ul className="mt-2 space-y-0.5 text-sm">

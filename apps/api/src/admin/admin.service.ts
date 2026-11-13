@@ -88,6 +88,8 @@ export class AdminService {
       name: company.name,
       website: company.website,
       logoUrl: company.logoUrl,
+      domain: company.domain,
+      domainVerifiedAt: company.domainVerifiedAt,
       description: company.description,
       createdAt: company.createdAt,
       verifiedAt: company.verifiedAt,

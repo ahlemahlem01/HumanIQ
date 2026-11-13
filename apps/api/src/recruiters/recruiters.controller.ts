@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Delete, Get, Inject, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 import { Role } from "@prisma/client";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { AllowPending } from "../auth/roles.decorator";
 import { RecruitersService } from "./recruiters.service";
 
 class UpdateRecruiterDto {
@@ -68,6 +69,7 @@ export class RecruitersController {
   }
 
   @Roles(Role.RECRUITER)
+  @AllowPending()
   @Get("me")
   me(@Req() req: { user: { recruiter: { id: string } } }) {
     return this.recruiters.getMe(req.user.recruiter.id);
@@ -77,6 +79,36 @@ export class RecruitersController {
   @Patch("me")
   update(@Req() req: { user: { recruiter: { id: string } } }, @Body() dto: UpdateRecruiterDto) {
     return this.recruiters.updateMe(req.user.recruiter.id, dto);
+  }
+
+  @Roles(Role.RECRUITER)
+  @Get("team/requests")
+  requests(@Req() req: { user: { recruiter: { id: string } } }) {
+    return this.recruiters.joinRequests(req.user.recruiter.id);
+  }
+
+  @Roles(Role.RECRUITER)
+  @Post("team/requests/:id")
+  decide(@Req() req: { user: { recruiter: { id: string } } }, @Param("id") id: string, @Body() dto: { accept?: boolean }) {
+    return this.recruiters.decideJoin(req.user.recruiter.id, id, dto.accept === true);
+  }
+
+  @Roles(Role.RECRUITER)
+  @Get("company/verification")
+  verification(@Req() req: { user: { recruiter: { id: string } } }) {
+    return this.recruiters.companyVerification(req.user.recruiter.id);
+  }
+
+  @Roles(Role.RECRUITER)
+  @Post("company/domain")
+  setDomain(@Req() req: { user: { recruiter: { id: string } } }, @Body() dto: { domain?: string }) {
+    return this.recruiters.setCompanyDomain(req.user.recruiter.id, String(dto.domain ?? ""));
+  }
+
+  @Roles(Role.RECRUITER)
+  @Post("company/verification/check")
+  checkDomain(@Req() req: { user: { recruiter: { id: string } } }) {
+    return this.recruiters.checkCompanyDomain(req.user.recruiter.id);
   }
 
   @Roles(Role.RECRUITER)

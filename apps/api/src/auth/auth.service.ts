@@ -33,6 +33,11 @@ export class AuthService {
       throw new BadRequestException("Utilisez votre adresse e-mail professionnelle (les adresses gratuites type Gmail ou Hotmail ne sont pas acceptées pour un compte recruteur).");
     }
 
+    // The e-mail domain identifies the company. A second person from the same domain does not create a duplicate
+    // company: they ask to join it, and its owner decides.
+    const domain = dto.role === Role.RECRUITER ? companyDomainOf(dto.email) : null;
+    const existingCompany = domain ? await this.prisma.company.findUnique({ where: { domain }, select: { id: true } }) : null;
+
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.user.create({
       data: {
@@ -48,19 +53,23 @@ export class AuthService {
             : undefined,
         recruiter:
           dto.role === Role.RECRUITER
-            ? {
-                create: {
-                  title: "Recruteur",
-                  company: {
-                    create: {
-                      name: dto.companyName!,
-                      slug: slugify(dto.companyName!),
-                      plan: "STARTER",
-                      subscriptionStatus: "trialing",
+            ? existingCompany
+              ? { create: { title: "Recruteur", memberRole: "MEMBER", memberStatus: "PENDING", company: { connect: { id: existingCompany.id } } } }
+              : {
+                  create: {
+                    title: "Recruteur",
+                    memberRole: "OWNER",
+                    company: {
+                      create: {
+                        name: dto.companyName!,
+                        slug: slugify(dto.companyName!),
+                        plan: "STARTER",
+                        subscriptionStatus: "trialing",
+                        domain: domain ?? undefined,
+                      },
                     },
                   },
-                },
-              }
+                }
             : undefined,
       },
       include: { candidate: true, recruiter: { include: { company: true } } },
@@ -270,6 +279,12 @@ const FREE_MAIL_DOMAINS = new Set([
   "yahoo.com", "yahoo.fr", "ymail.com", "icloud.com", "me.com", "aol.com", "gmx.com", "gmx.fr", "mail.com", "proton.me",
   "protonmail.com", "orange.fr", "free.fr", "laposte.net", "wanadoo.fr", "sfr.fr", "yandex.com", "zoho.com",
 ]);
+
+/** "marie@acme.com" -> "acme.com". Null for free-mail domains: they identify nobody. */
+function companyDomainOf(email: string) {
+  const domain = email.toLowerCase().split("@")[1] ?? "";
+  return domain && !FREE_MAIL_DOMAINS.has(domain) ? domain : null;
+}
 
 function isFreeMailDomain(email: string) {
   return FREE_MAIL_DOMAINS.has(email.toLowerCase().split("@")[1] ?? "");

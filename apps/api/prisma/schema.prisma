@@ -106,11 +106,26 @@ model Company {
   seats                Int                @default(3)
   /// Set by an admin once the company is confirmed to be real. Until then its recruiters cannot see candidate data.
   verifiedAt           DateTime?
+  /// E-mail domain of the company (never a free-mail domain). One company per domain.
+  domain               String?            @unique
+  /// Secret to publish in a DNS TXT record to prove the company controls the domain.
+  domainToken          String?
+  domainVerifiedAt     DateTime?
   recruiters           RecruiterProfile[]
   jobs                 Job[]
   conversations        Conversation[]
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
+}
+
+enum MemberRole {
+  OWNER
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  PENDING
 }
 
 model RecruiterProfile {
@@ -124,6 +139,10 @@ model RecruiterProfile {
   location    String?
   phone       String?
   avatarImage String?
+  /// OWNER manages the company (identity, domain, members). MEMBER works on jobs and candidates.
+  memberRole  MemberRole   @default(MEMBER)
+  /// PENDING: asked to join an existing company, waiting for its owner to accept.
+  memberStatus MemberStatus @default(ACTIVE)
   jobs        Job[]
 }
 

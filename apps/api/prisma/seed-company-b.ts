@@ -38,6 +38,7 @@ async function main() {
       recruiter: {
         create: {
           title: "Recruteur",
+          memberRole: "OWNER",
           company: { create: { name: "Entreprise B", slug: "entreprise-b-test", verifiedAt: new Date(), plan: "STARTER", subscriptionStatus: "trialing" } },
         },
       },

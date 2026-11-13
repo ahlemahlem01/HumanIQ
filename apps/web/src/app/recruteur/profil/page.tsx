@@ -22,7 +22,9 @@ type Profile = {
   location: string | null;
   phone: string | null;
   avatarImage: string | null;
-  company: { name: string; description: string | null; website: string | null; logoUrl?: string | null; verifiedAt?: string | null };
+  memberRole?: "OWNER" | "MEMBER";
+  memberStatus?: "ACTIVE" | "PENDING";
+  company: { name: string; description: string | null; website: string | null; logoUrl?: string | null; verifiedAt?: string | null; domain?: string | null; domainVerifiedAt?: string | null };
   user: { firstName: string; lastName: string; email: string };
   jobs: Job[];
 };
@@ -66,6 +68,11 @@ export default function RecruiterProfilePage() {
   const [companyError, setCompanyError] = useState("");
   const [companySaving, setCompanySaving] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
+
+  async function refreshProfile() {
+    if (!token) return;
+    setProfile(await api<Profile>("/recruiters/me", { token }));
+  }
 
   function confirmReverify(what: string) {
     return window.confirm(
@@ -412,7 +419,7 @@ export default function RecruiterProfilePage() {
           <section className="rounded-2xl border border-line bg-cream p-5">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-semibold">Entreprise</h2>
-              {!editingCompany ? (
+              {!editingCompany && profile.memberRole === "OWNER" ? (
                 <button type="button" onClick={() => setEditingCompany(true)} className="text-sm font-semibold text-forest hover:underline">
                   Modifier
                 </button>
@@ -523,6 +530,10 @@ export default function RecruiterProfilePage() {
                 Site de l&apos;entreprise
               </a>
             ) : null}
+            {profile.memberRole === "OWNER" ? <DomainVerification token={token} onChange={() => void refreshProfile()} /> : null}
+            {profile.memberRole !== "OWNER" ? (
+              <p className="mt-3 text-xs leading-5 text-sage">Seul le responsable de l&apos;entreprise peut modifier ces informations.</p>
+            ) : null}
               </>
             )}
           </section>
@@ -547,5 +558,121 @@ export default function RecruiterProfilePage() {
         </aside>
       </div>
     </AppShell>
+  );
+}
+
+type Verification = {
+  domain: string | null;
+  domainVerifiedAt: string | null;
+  verifiedAt: string | null;
+  record: { type: string; host: string; value: string } | null;
+};
+
+/** Owner only: proves the company controls its domain (DNS TXT record); validates the company automatically. */
+function DomainVerification({ token, onChange }: { token: string | null; onChange: () => void }) {
+  const [state, setState] = useState<Verification | null>(null);
+  const [domain, setDomain] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [changing, setChanging] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    api<Verification>("/recruiters/company/verification", { token })
+      .then(setState)
+      .catch(() => undefined);
+  }, [token]);
+
+  async function run(action: () => Promise<Verification>, success?: string) {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      setState(await action());
+      if (success) setMessage(success);
+      onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!state) return null;
+  const proven = Boolean(state.domainVerifiedAt);
+
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-white p-4 text-sm">
+      <p className="font-semibold">Vérification de l&apos;entreprise</p>
+      {proven ? (
+        <p className="mt-1 text-good">✓ Domaine {state.domain} vérifié : les données des candidats sont accessibles à votre équipe.</p>
+      ) : state.verifiedAt && !state.domain ? (
+        <p className="mt-1 text-good">✓ Entreprise validée par l&apos;équipe HumanIQ.</p>
+      ) : (
+        <p className="mt-1 text-sage">
+          Prouvez que vous contrôlez le domaine de l&apos;entreprise : la validation est alors automatique et l&apos;accès aux candidats s&apos;ouvre aussitôt.
+        </p>
+      )}
+
+      {!proven && (!state.domain || changing) ? (
+        <form
+          className="mt-3 flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void run(
+              () => api<Verification>("/recruiters/company/domain", { method: "POST", token, body: { domain } }),
+            ).then(() => setChanging(false));
+          }}
+        >
+          <input
+            value={domain}
+            onChange={(event) => setDomain(event.target.value)}
+            placeholder="exemple.com"
+            className="min-w-0 flex-1 rounded-xl border border-line px-3 py-2 outline-none focus:border-forest"
+          />
+          <button disabled={busy || !domain.trim()} className="rounded-full bg-forest px-4 py-2 font-semibold text-white disabled:opacity-60">
+            Continuer
+          </button>
+        </form>
+      ) : null}
+
+      {!proven && state.domain && state.record && !changing ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-sage">
+            Dans la zone DNS de <strong>{state.domain}</strong>, ajoutez cet enregistrement (le service informatique sait le faire) :
+          </p>
+          <dl className="space-y-1.5 rounded-lg bg-paper p-3 text-xs">
+            <div>
+              <dt className="text-sage">Type</dt>
+              <dd className="font-mono">{state.record.type}</dd>
+            </div>
+            <div>
+              <dt className="text-sage">Nom / hôte</dt>
+              <dd className="break-all font-mono">{state.record.host}</dd>
+            </div>
+            <div>
+              <dt className="text-sage">Valeur</dt>
+              <dd className="break-all font-mono">{state.record.value}</dd>
+            </div>
+          </dl>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run(() => api<Verification>("/recruiters/company/verification/check", { method: "POST", token }), "Domaine vérifié.")}
+              className="rounded-full bg-forest px-4 py-2 font-semibold text-white disabled:opacity-60"
+            >
+              {busy ? "Vérification…" : "Vérifier maintenant"}
+            </button>
+            <button type="button" onClick={() => { setChanging(true); setDomain(state.domain ?? ""); }} className="rounded-full border border-line px-4 py-2 font-semibold hover:border-forest">
+              Changer de domaine
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {message ? <p className="mt-2 text-good">{message}</p> : null}
+      {error ? <p className="mt-2 text-red-700">{error}</p> : null}
+    </div>
   );
 }

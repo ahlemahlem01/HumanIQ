@@ -38,6 +38,7 @@ type Stats = {
 type Me = {
   title: string | null;
   avatarImage: string | null;
+  memberStatus?: "ACTIVE" | "PENDING";
   company: { name: string; verifiedAt?: string | null };
   user: { firstName: string; lastName: string };
 };
@@ -130,7 +131,16 @@ export default function RecruiterHome() {
     <AppShell role="RECRUITER" plain>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          {me && !me.company.verifiedAt ? (
+          {me?.memberStatus === "PENDING" ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-warn">
+              <p className="font-semibold">Votre demande d&apos;accès est en attente</p>
+              <p>
+                Votre adresse e-mail correspond à l&apos;entreprise {me.company.name}, qui a déjà un responsable. Il doit accepter votre demande
+                (page Équipe de son compte) avant que vous puissiez utiliser la plateforme.
+              </p>
+            </div>
+          ) : null}
+          {me && me.memberStatus !== "PENDING" && !me.company.verifiedAt ? (
             <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-warn">
               <p className="font-semibold">Votre entreprise est en cours de vérification</p>
               <p>
