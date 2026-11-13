@@ -152,7 +152,9 @@ function ImportsContent() {
                       {initials(name)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-lg font-semibold">{name}</p>
+                      <Link href={`/recruteur/candidats/${id}`} className="text-lg font-semibold hover:text-forest hover:underline">
+                        {name}
+                      </Link>
                       <p className="text-sm text-sage">
                         {candidate.headline ?? "Profil importé"}
                         {candidate.location ? ` · ${candidate.location}` : ""}

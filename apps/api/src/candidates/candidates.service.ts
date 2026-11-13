@@ -1,6 +1,6 @@
 import { mkdir, unlink, writeFile } from "fs/promises";
 import { join } from "path";
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { EmbeddingsService } from "../ai/embeddings.service";
 import { SearchService, type TalentDoc } from "../search/search.module";
@@ -464,17 +464,46 @@ export class CandidatesService {
     }));
   }
 
+  /**
+   * Profile page of a candidate for a recruiter. Allowed when:
+   * - the candidate applied to (or was imported into) a job of the recruiter's company: it is the company's own data,
+   *   shown with the real name and the full profile, even before the company is verified;
+   * - or the candidate opted in to the talent pool and the recruiter's company is verified (anonymous if they chose so);
+   * - or the viewer is an admin.
+   */
   async openForRecruiter(candidateId: string, viewerId: string) {
+    const viewer = await this.prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { role: true, recruiter: { select: { companyId: true, company: { select: { verifiedAt: true } } } } },
+    });
+    const isAdmin = viewer?.role === "ADMIN";
+    const companyId = viewer?.recruiter?.companyId;
     const row = await this.prisma.candidateProfile.findFirst({
-      where: { id: candidateId, reverseRecruiting: true },
-      include: { user: { select: { firstName: true, lastName: true } } },
+      where: { id: candidateId, user: { anonymizedAt: null } },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true } },
+        experiences: { orderBy: { startDate: "desc" } },
+        educations: { orderBy: { startDate: "desc" } },
+      },
     });
     if (!row) throw new NotFoundException("Profil introuvable.");
+
+    const own = isAdmin || Boolean(companyId && (await this.prisma.application.findFirst({ where: { candidateId, job: { companyId } }, select: { id: true } })));
+    if (!own) {
+      if (!row.reverseRecruiting) throw new NotFoundException("Profil introuvable.");
+      if (!viewer?.recruiter?.company.verifiedAt) {
+        throw new ForbiddenException(
+          "Votre entreprise est en cours de vérification. L'accès aux données des candidats sera ouvert dès sa validation.",
+        );
+      }
+    }
+
     await this.prisma.profileView.upsert({
       where: { candidateId_viewerId: { candidateId, viewerId } },
       create: { candidateId, viewerId },
       update: { count: { increment: 1 }, viewedAt: new Date() },
     });
+    const anonymous = row.anonymousVisible && !own;
     return {
       id: row.id,
       headline: row.headline,
@@ -485,10 +514,16 @@ export class CandidatesService {
       salaryMin: row.salaryMin,
       salaryMax: row.salaryMax,
       currency: row.currency,
-      anonymous: row.anonymousVisible,
-      displayName: row.anonymousVisible
-        ? `${row.user.firstName[0]}. ${row.user.lastName[0]}.`
-        : `${row.user.firstName} ${row.user.lastName}`,
+      anonymous,
+      displayName: anonymous ? `${row.user.firstName[0]}. ${row.user.lastName[0]}.` : `${row.user.firstName} ${row.user.lastName}`,
+      source: row.source,
+      linkedinUrl: own ? row.linkedinUrl : null,
+      // Contact details and detailed history only for the company's own candidates, never for anonymous pool profiles.
+      email: own && !row.source.match(/LINKEDIN|PASTE/) ? row.user.email : null,
+      experiences: own
+        ? row.experiences.map((item) => ({ id: item.id, title: item.title, company: item.company, current: item.current, description: item.description }))
+        : [],
+      educations: own ? row.educations.map((item) => ({ id: item.id, school: item.school, degree: item.degree, field: item.field })) : [],
     };
   }
 

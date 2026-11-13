@@ -307,7 +307,6 @@ export class CandidatesController {
   }
 
   @Roles(Role.RECRUITER, Role.ADMIN)
-  @UseGuards(VerifiedCompanyGuard)
   @Get("pool/:id")
   open(@Req() req: { user: { id: string } }, @Param("id") id: string) {
     return this.candidates.openForRecruiter(id, req.user.id);

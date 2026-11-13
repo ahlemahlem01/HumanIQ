@@ -296,7 +296,13 @@ export default function PipelinePage() {
                           {item.candidate.user.lastName[0]}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{name}</p>
+                          <Link
+                            href={`/recruteur/candidats/${item.candidate.id}`}
+                            draggable={false}
+                            className="block truncate text-sm font-semibold hover:text-forest hover:underline"
+                          >
+                            {name}
+                          </Link>
                           <p className="text-xs text-sage">
                             {score == null ? "Non évalué" : score >= 75 ? "Excellent match" : score >= 55 ? "Bon match" : score >= 35 ? "Match partiel" : "Match faible"}
                           </p>
