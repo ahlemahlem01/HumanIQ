@@ -38,7 +38,7 @@ type Stats = {
 type Me = {
   title: string | null;
   avatarImage: string | null;
-  memberStatus?: "ACTIVE" | "PENDING";
+  memberStatus?: "ACTIVE" | "PENDING" | "REJECTED";
   company: { name: string; verifiedAt?: string | null };
   user: { firstName: string; lastName: string };
 };
@@ -140,7 +140,16 @@ export default function RecruiterHome() {
               </p>
             </div>
           ) : null}
-          {me && me.memberStatus !== "PENDING" && !me.company.verifiedAt ? (
+          {me?.memberStatus === "REJECTED" ? (
+            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm leading-6 text-red-700">
+              <p className="font-semibold">Votre demande d&apos;accès a été refusée</p>
+              <p>
+                Le responsable de {me.company.name} n&apos;a pas accepté votre demande. Si vous pensez qu&apos;il s&apos;agit d&apos;une erreur,
+                contactez-le directement.
+              </p>
+            </div>
+          ) : null}
+          {me && me.memberStatus === "ACTIVE" && !me.company.verifiedAt ? (
             <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-warn">
               <p className="font-semibold">Votre entreprise est en cours de vérification</p>
               <p>

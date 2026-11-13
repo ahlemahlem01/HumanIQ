@@ -126,6 +126,7 @@ enum MemberRole {
 enum MemberStatus {
   ACTIVE
   PENDING
+  REJECTED
 }
 
 model RecruiterProfile {

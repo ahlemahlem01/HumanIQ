@@ -261,8 +261,11 @@ export class RecruitersService {
         .sendJoinAccepted(member.user.email, member.user.firstName, member.company.name, `${process.env.FRONTEND_URL ?? "http://localhost:3100"}/recruteur`)
         .catch((err) => this.logger.warn(`Join accepted e-mail failed: ${err instanceof Error ? err.message : err}`));
     } else {
-      // Refused: the account is removed (it never had access to anything).
-      await this.prisma.user.delete({ where: { id: member.userId } });
+      // Refused: the account is kept (with its history) but stays locked out; the person is told by e-mail and sees it on login.
+      await this.prisma.recruiterProfile.update({ where: { id: member.id }, data: { memberStatus: "REJECTED" } });
+      void this.mail
+        .sendJoinRefused(member.user.email, member.user.firstName, member.company.name)
+        .catch((err) => this.logger.warn(`Join refused e-mail failed: ${err instanceof Error ? err.message : err}`));
     }
     const recruiter = await this.prisma.recruiterProfile.findUnique({ where: { id: recruiterId }, select: { userId: true } });
     await this.prisma.auditLog.create({

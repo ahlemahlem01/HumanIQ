@@ -85,6 +85,25 @@ export class MailService {
     });
   }
 
+  /** To a recruiter whose request to join a company was refused. */
+  async sendJoinRefused(to: string, firstName: string, companyName: string) {
+    await this.send({
+      to,
+      subject: `Votre demande d'accès à ${companyName} n'a pas été acceptée`,
+      text: [
+        `Bonjour ${firstName},`,
+        "",
+        `Le responsable de ${companyName} n'a pas accepté votre demande d'accès à l'espace de recrutement.`,
+        "Si vous pensez qu'il s'agit d'une erreur, contactez-le directement : il peut vous communiquer les informations nécessaires.",
+      ].join("\n"),
+      html: layout(
+        `Bonjour ${escapeHtml(firstName)}, le responsable de ${escapeHtml(companyName)} n'a pas accepté votre demande d'accès à l'espace de recrutement. Si vous pensez qu'il s'agit d'une erreur, contactez-le directement.`,
+        "Ouvrir HumanIQ",
+        `${process.env.FRONTEND_URL ?? "http://localhost:3100"}/recruteur`,
+      ),
+    });
+  }
+
   /** To the owner: the DNS proof was found, the company is validated. */
   async sendDomainVerified(to: string, firstName: string, companyName: string, domain: string, url: string) {
     await this.send({
