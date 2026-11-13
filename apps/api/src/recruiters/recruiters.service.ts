@@ -120,6 +120,42 @@ export class RecruitersService {
     return row;
   }
 
+  /**
+   * Any member of the team can edit the company card. Renaming a verified company puts it back "en attente":
+   * otherwise a verified company could be renamed after a well-known brand to impersonate it.
+   */
+  async updateCompany(recruiterId: string, data: { name?: string; description?: string; website?: string }) {
+    const companyId = await companyIdOf(this.prisma, recruiterId);
+    const current = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { name: true } });
+
+    let website: string | null | undefined = clean(data.website);
+    if (website) {
+      const withScheme = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+      try {
+        const url = new URL(withScheme);
+        if (!/^https?:$/.test(url.protocol) || !url.hostname.includes(".")) throw new Error("invalid");
+        website = url.toString();
+      } catch {
+        throw new BadRequestException("Adresse du site invalide (exemple : https://www.exemple.com).");
+      }
+    }
+
+    const name = data.name === undefined ? undefined : data.name.trim();
+    if (name !== undefined && name.length < 2) throw new BadRequestException("Le nom de l'entreprise est trop court.");
+    const renamed = name !== undefined && name !== current.name;
+
+    await this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        description: clean(data.description),
+        website,
+        ...(renamed ? { verifiedAt: null } : {}),
+      },
+    });
+    return this.getMe(recruiterId);
+  }
+
   async updateMe(
     recruiterId: string,
     data: { title?: string; bio?: string; location?: string; phone?: string },

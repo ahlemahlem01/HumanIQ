@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Inject, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { IsOptional, IsString, MaxLength } from "class-validator";
+import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 import { Role } from "@prisma/client";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
@@ -27,6 +27,24 @@ class UpdateRecruiterDto {
   @IsString()
   @MaxLength(40)
   phone?: string;
+}
+
+class UpdateCompanyDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  website?: string;
 }
 
 @Controller("recruiters")
@@ -59,6 +77,12 @@ export class RecruitersController {
   @Patch("me")
   update(@Req() req: { user: { recruiter: { id: string } } }, @Body() dto: UpdateRecruiterDto) {
     return this.recruiters.updateMe(req.user.recruiter.id, dto);
+  }
+
+  @Roles(Role.RECRUITER)
+  @Patch("company")
+  updateCompany(@Req() req: { user: { recruiter: { id: string } } }, @Body() dto: UpdateCompanyDto) {
+    return this.recruiters.updateCompany(req.user.recruiter.id, dto);
   }
 
   @Roles(Role.RECRUITER)

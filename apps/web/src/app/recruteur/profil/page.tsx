@@ -21,7 +21,7 @@ type Profile = {
   location: string | null;
   phone: string | null;
   avatarImage: string | null;
-  company: { name: string; description: string | null; website: string | null };
+  company: { name: string; description: string | null; website: string | null; verifiedAt?: string | null };
   user: { firstName: string; lastName: string; email: string };
   jobs: Job[];
 };
@@ -61,6 +61,9 @@ export default function RecruiterProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [editingCompany, setEditingCompany] = useState(false);
+  const [companyError, setCompanyError] = useState("");
+  const [companySaving, setCompanySaving] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("nextgen_token");
@@ -82,6 +85,39 @@ export default function RecruiterProfilePage() {
       setError(err instanceof Error ? err.message : "Photo de profil impossible à envoyer.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function saveCompany(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !profile) return;
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") ?? "").trim();
+    if (name !== profile.company.name && profile.company.verifiedAt) {
+      const ok = window.confirm(
+        "Changer le nom de l'entreprise la remet « en attente de validation » : l'accès aux données des candidats et la visibilité de vos offres seront suspendus jusqu'à une nouvelle validation. Continuer ?",
+      );
+      if (!ok) return;
+    }
+    setCompanySaving(true);
+    setCompanyError("");
+    try {
+      setProfile(
+        await api<Profile>("/recruiters/company", {
+          method: "PATCH",
+          token,
+          body: {
+            name,
+            description: String(form.get("description") ?? ""),
+            website: String(form.get("website") ?? ""),
+          },
+        }),
+      );
+      setEditingCompany(false);
+    } catch (err) {
+      setCompanyError(err instanceof Error ? err.message : "Enregistrement impossible.");
+    } finally {
+      setCompanySaving(false);
     }
   }
 
@@ -347,7 +383,69 @@ export default function RecruiterProfilePage() {
           </section>
 
           <section className="rounded-2xl border border-line bg-cream p-5">
-            <h2 className="text-base font-semibold">Entreprise</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold">Entreprise</h2>
+              {!editingCompany ? (
+                <button type="button" onClick={() => setEditingCompany(true)} className="text-sm font-semibold text-forest hover:underline">
+                  Modifier
+                </button>
+              ) : null}
+            </div>
+            {editingCompany ? (
+              <form onSubmit={saveCompany} className="mt-3 space-y-3 text-sm">
+                <label className="block font-medium">
+                  Nom
+                  <input
+                    name="name"
+                    required
+                    minLength={2}
+                    maxLength={120}
+                    defaultValue={profile.company.name}
+                    className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2 outline-none focus:border-forest focus:ring-2 focus:ring-forest/20"
+                  />
+                </label>
+                <label className="block font-medium">
+                  Présentation
+                  <textarea
+                    name="description"
+                    rows={4}
+                    maxLength={2000}
+                    defaultValue={profile.company.description ?? ""}
+                    placeholder="Activité, taille de l'équipe, culture…"
+                    className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2 outline-none focus:border-forest focus:ring-2 focus:ring-forest/20"
+                  />
+                </label>
+                <label className="block font-medium">
+                  Site web
+                  <input
+                    name="website"
+                    defaultValue={profile.company.website ?? ""}
+                    placeholder="https://www.exemple.com"
+                    className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2 outline-none focus:border-forest focus:ring-2 focus:ring-forest/20"
+                  />
+                </label>
+                {profile.company.verifiedAt ? (
+                  <p className="text-xs leading-5 text-sage">Changer le nom exige une nouvelle validation de l&apos;entreprise.</p>
+                ) : null}
+                {companyError ? <p className="text-red-700">{companyError}</p> : null}
+                <div className="flex gap-2">
+                  <button disabled={companySaving} className="rounded-full bg-forest px-5 py-2 font-semibold text-white disabled:opacity-60">
+                    {companySaving ? "Enregistrement…" : "Enregistrer"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCompany(false);
+                      setCompanyError("");
+                    }}
+                    className="rounded-full border border-line px-5 py-2 font-semibold hover:border-forest"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
             <p className="mt-3 flex items-center gap-3 text-sm font-semibold">
               <span className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-paper text-xs font-bold">
                 {initialsOf(profile.company.name)}
@@ -362,6 +460,8 @@ export default function RecruiterProfilePage() {
                 Site de l&apos;entreprise
               </a>
             ) : null}
+              </>
+            )}
           </section>
 
           <section className="rounded-2xl border border-line bg-cream p-5">
