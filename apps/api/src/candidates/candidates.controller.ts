@@ -307,6 +307,17 @@ export class CandidatesController {
   }
 
   @Roles(Role.RECRUITER, Role.ADMIN)
+  @Get("pool/:id/cv-file")
+  async profileFile(@Req() req: { user: { id: string } }, @Param("id") id: string, @Query("download") download?: string) {
+    const file = await this.candidates.profileCvFile(id, req.user.id);
+    const name = file.fileName.replace(/[^\w.\- ]+/g, "_");
+    return new StreamableFile(file.buffer, {
+      type: file.mimeType,
+      disposition: `${download ? "attachment" : "inline"}; filename="${name}"`,
+    });
+  }
+
+  @Roles(Role.RECRUITER, Role.ADMIN)
   @Get("pool/:id")
   open(@Req() req: { user: { id: string } }, @Param("id") id: string) {
     return this.candidates.openForRecruiter(id, req.user.id);

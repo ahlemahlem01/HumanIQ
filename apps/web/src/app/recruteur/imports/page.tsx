@@ -148,9 +148,9 @@ function ImportsContent() {
               return (
                 <li key={id} className="rounded-2xl border border-line bg-white p-5">
                   <div className="flex items-start gap-4">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-tint text-sm font-semibold text-forest">
+                    <Link href={`/recruteur/candidats/${id}`} aria-label={`Ouvrir le profil de ${name}`} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-tint text-sm font-semibold text-forest hover:bg-forest hover:text-white">
                       {initials(name)}
-                    </span>
+                    </Link>
                     <div className="min-w-0 flex-1">
                       <Link href={`/recruteur/candidats/${id}`} className="text-lg font-semibold hover:text-forest hover:underline">
                         {name}
@@ -192,6 +192,9 @@ function ImportsContent() {
                       </p>
                     ))}
                   </div>
+                  <Link href={`/recruteur/candidats/${id}`} className="mt-3 inline-block rounded-full border border-forest px-4 py-1.5 text-sm font-semibold text-forest hover:bg-tint">
+                    Voir le profil
+                  </Link>
                   {available.length ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <select

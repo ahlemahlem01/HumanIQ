@@ -465,19 +465,44 @@ export class CandidatesService {
   }
 
   /**
-   * Profile page of a candidate for a recruiter. Allowed when:
-   * - the candidate applied to (or was imported into) a job of the recruiter's company: it is the company's own data,
-   *   shown with the real name and the full profile, even before the company is verified;
-   * - or the candidate opted in to the talent pool and the recruiter's company is verified (anonymous if they chose so);
-   * - or the viewer is an admin.
+   * Who may open a candidate's profile:
+   * - the candidate applied to (or was imported into) a job of the recruiter's company: the company's own data,
+   *   fully visible even before the company is verified;
+   * - the candidate opted in to the talent pool and the recruiter's company is verified;
+   * - an admin.
    */
-  async openForRecruiter(candidateId: string, viewerId: string) {
+  private async profileAccess(candidateId: string, viewerId: string) {
     const viewer = await this.prisma.user.findUnique({
       where: { id: viewerId },
       select: { role: true, recruiter: { select: { companyId: true, company: { select: { verifiedAt: true } } } } },
     });
     const isAdmin = viewer?.role === "ADMIN";
     const companyId = viewer?.recruiter?.companyId;
+    const applications = companyId
+      ? await this.prisma.application.findMany({
+          where: { candidateId, job: { companyId } },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, stage: true, job: { select: { id: true, title: true } } },
+        })
+      : [];
+    const own = isAdmin || applications.length > 0;
+    if (!own) {
+      const open = await this.prisma.candidateProfile.findFirst({
+        where: { id: candidateId, reverseRecruiting: true, user: { anonymizedAt: null } },
+        select: { id: true },
+      });
+      if (!open) throw new NotFoundException("Profil introuvable.");
+      if (!viewer?.recruiter?.company.verifiedAt) {
+        throw new ForbiddenException(
+          "Votre entreprise est en cours de vérification. L'accès aux données des candidats sera ouvert dès sa validation.",
+        );
+      }
+    }
+    return { own, applications };
+  }
+
+  async openForRecruiter(candidateId: string, viewerId: string) {
+    const { own, applications } = await this.profileAccess(candidateId, viewerId);
     const row = await this.prisma.candidateProfile.findFirst({
       where: { id: candidateId, user: { anonymizedAt: null } },
       include: {
@@ -488,22 +513,13 @@ export class CandidatesService {
     });
     if (!row) throw new NotFoundException("Profil introuvable.");
 
-    const own = isAdmin || Boolean(companyId && (await this.prisma.application.findFirst({ where: { candidateId, job: { companyId } }, select: { id: true } })));
-    if (!own) {
-      if (!row.reverseRecruiting) throw new NotFoundException("Profil introuvable.");
-      if (!viewer?.recruiter?.company.verifiedAt) {
-        throw new ForbiddenException(
-          "Votre entreprise est en cours de vérification. L'accès aux données des candidats sera ouvert dès sa validation.",
-        );
-      }
-    }
-
     await this.prisma.profileView.upsert({
       where: { candidateId_viewerId: { candidateId, viewerId } },
       create: { candidateId, viewerId },
       update: { count: { increment: 1 }, viewedAt: new Date() },
     });
     const anonymous = row.anonymousVisible && !own;
+    const imported = row.source === "LINKEDIN" || row.source === "PASTE";
     return {
       id: row.id,
       headline: row.headline,
@@ -517,14 +533,24 @@ export class CandidatesService {
       anonymous,
       displayName: anonymous ? `${row.user.firstName[0]}. ${row.user.lastName[0]}.` : `${row.user.firstName} ${row.user.lastName}`,
       source: row.source,
+      own,
+      // Everything below is only for the company's own candidates, never for anonymous pool profiles.
       linkedinUrl: own ? row.linkedinUrl : null,
-      // Contact details and detailed history only for the company's own candidates, never for anonymous pool profiles.
-      email: own && !row.source.match(/LINKEDIN|PASTE/) ? row.user.email : null,
+      email: own && !imported ? row.user.email : null,
+      applications: own ? applications : [],
+      cv: own ? { hasFile: hasCvFile(row.id), fileName: row.cvFileName, text: row.cvText } : null,
       experiences: own
         ? row.experiences.map((item) => ({ id: item.id, title: item.title, company: item.company, current: item.current, description: item.description }))
         : [],
       educations: own ? row.educations.map((item) => ({ id: item.id, school: item.school, degree: item.degree, field: item.field })) : [],
     };
+  }
+
+  /** Original CV file, for the company's own candidates (same rule as the profile page). */
+  async profileCvFile(candidateId: string, viewerId: string) {
+    const { own } = await this.profileAccess(candidateId, viewerId);
+    if (!own) throw new ForbiddenException("Le CV n'est pas accessible pour ce profil.");
+    return this.cvFile(candidateId, viewerId);
   }
 
   async library() {
