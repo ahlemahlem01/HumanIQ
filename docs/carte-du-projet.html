@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HumanIQ — Carte du projet</title>
+<style>
+  :root {
+    --bg: #f4f7fc; --panel: #ffffff; --ink: #0e1b3d; --muted: #5b6b8c; --line: #cfd8ea; --accent: #1a3585; --good: #0b7a4b;
+    --b1: #1a3585; --b2: #0b7a8a; --b3: #7a3fb0; --b4: #b5651d; --b5: #a02b50; --b6: #2f7d32; --b7: #5b6b8c; --b8: #8a6d00; --b9: #00796b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1324; --panel: #141c33; --ink: #e8edf9; --muted: #93a1c4; --line: #2a3556; --accent: #7fa0ff; --good: #5fd39a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .grow { flex: 1; }
+  .bar { width: 200px; height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--good); transition: width .4s; }
+  button, input { font: inherit; color: inherit; }
+  button { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 5px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  input[type=text], input[type=search] { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 5px 9px; min-width: 0; }
+  .seg { display: inline-flex; gap: 4px; }
+  main { padding: 18px; overflow-x: auto; }
+  /* ---------- tree (carte) ---------- */
+  .node { display: flex; align-items: center; }
+  .kids { display: flex; flex-direction: column; margin-left: 26px; position: relative; }
+  .kids.hidden { display: none; }
+  .kid { position: relative; padding: 4px 0 4px 26px; }
+  .kid::before { content: ""; position: absolute; left: 0; top: 50%; width: 26px; border-top: 2px solid var(--c, var(--line)); }
+  .kid::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 2px solid var(--c, var(--line)); }
+  .kid:first-child::after { top: 50%; }
+  .kid:last-child::after { bottom: 50%; }
+  .kid:only-child::after { display: none; }
+  .box { background: var(--panel); border: 2px solid var(--c, var(--line)); border-radius: 10px; padding: 6px 10px; max-width: 340px; min-width: 120px; display: flex; gap: 8px; align-items: flex-start; }
+  .box.branch { cursor: pointer; background: var(--c); color: #fff; border-color: var(--c); font-weight: 600; align-items: center; }
+  .box.root { font-size: 17px; padding: 14px 18px; background: var(--accent); color: #fff; border-color: var(--accent); max-width: 220px; text-align: center; justify-content: center; }
+  .box.done { opacity: .6; }
+  .box.done .t { text-decoration: line-through; }
+  .t { font-weight: 600; }
+  .d { color: var(--muted); font-size: 12.5px; display: block; }
+  .box.branch .d { color: rgba(255,255,255,.85); font-weight: 400; }
+  .cnt { margin-left: auto; font-size: 11.5px; background: rgba(255,255,255,.22); border-radius: 99px; padding: 1px 8px; white-space: nowrap; }
+  .chev { width: 10px; display: inline-block; }
+  input[type=checkbox] { margin-top: 3px; accent-color: var(--good); width: 16px; height: 16px; flex: none; }
+  .go, .cp { text-decoration: none; color: var(--accent); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: 12px; margin-left: 6px; white-space: nowrap; background: var(--bg); cursor: pointer; }
+  .go:hover, .cp:hover { border-color: var(--accent); }
+  .hide { display: none !important; }
+  mark { background: #ffe58a; color: #000; border-radius: 3px; }
+  /* ---------- vue liste ---------- */
+  body.list .node { display: block; }
+  body.list .kids { margin-left: 14px; border-left: 2px solid var(--c, var(--line)); padding-left: 10px; }
+  body.list .kid { padding: 3px 0; }
+  body.list .kid::before, body.list .kid::after { display: none; }
+  body.list .box { max-width: 720px; }
+  body.list main { overflow-x: visible; }
+  @media (max-width: 760px) { header { position: static; } .bar { width: 120px; } }
+  footer { padding: 6px 18px 30px; color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>HumanIQ — carte du projet</h1>
+    <div class="sub">Cliquez une branche pour la replier. Cochez ce que vous avez testé : c'est mémorisé dans ce navigateur.</div>
+  </div>
+  <div class="grow"></div>
+  <div><div class="bar"><i id="bar"></i></div><div class="sub" id="total">0 / 0 testés</div></div>
+  <span class="seg" role="group" aria-label="Filtre">
+    <button data-f="all" class="on">Tout</button><button data-f="todo">Restant</button><button data-f="done">Fait</button>
+  </span>
+  <input type="search" id="q" placeholder="Rechercher…" aria-label="Rechercher">
+  <label class="sub">Site <input type="text" id="base" size="22" value="http://localhost:3100" aria-label="Adresse du site"></label>
+  <button id="expand">Tout déplier</button><button id="collapse">Tout replier</button>
+  <button id="view">Vue liste</button><button id="reset">Réinitialiser</button>
+</header>
+<main><div id="tree"></div></main>
+<footer>
+  Pour lancer le projet : <code>npm run dev</code> à la racine (site sur le port 3100, API sur 4100), ou voir <code>DEPLOY.md</code>.
+  Tests automatiques : <code>cd apps/api &amp;&amp; npm test</code>. Cette carte est dans <code>docs/carte-du-projet.html</code>.
+</footer>
+
+<script>
+const PW = "Demo1234!";
+/* Chaque feuille = un point de test. t: titre, d: quoi vérifier, r: route (lien), cp: texte à copier. */
+const DATA = {
+  t: "HumanIQ", d: "Recrutement augmenté par l'IA",
+  c: [
+    { t: "Comptes de démo", d: "Mot de passe de tous : " + PW, k: 1, c: [
+      { t: "Candidat — Leila Mansouri", d: "candidat@mail.com", cp: "candidat@mail.com", r: "/login" },
+      { t: "Recruteur — Atlas Labs", d: "recruteur@atlas.tech", cp: "recruteur@atlas.tech", r: "/login" },
+      { t: "Recruteur d'une 2e entreprise (ESPRIT)", d: "ahlem.alaya@esprit.tn · mot de passe défini au seed (ESPRIT_PASSWORD) · sert à tester l'isolation entre entreprises", cp: "ahlem.alaya@esprit.tn" },
+      { t: "Administrateur", d: "admin@nextgen.hr", cp: "admin@nextgen.hr", r: "/login" },
+      { t: "Autres candidats fictifs", d: "@demo.humaniq.test (npm run seed:demo dans apps/api)" },
+    ]},
+    { t: "Pages publiques", d: "Sans connexion", k: 2, c: [
+      { t: "Accueil public", d: "Présentation, boutons Connexion / Inscription", r: "/" },
+      { t: "Liste des offres", d: "Offres publiées, filtres, recherche", r: "/offres" },
+      { t: "Détail d'une offre", d: "Description, compétences, bouton Postuler (redirige vers la connexion si non connecté)", r: "/offres" },
+      { t: "Connexion", d: "Mauvais mot de passe → message ; bon compte → redirection selon le rôle", r: "/login" },
+      { t: "Inscription", d: "Candidat ou recruteur ; confirmation d'adresse (en local sans messagerie, un lien direct est affiché)", r: "/register" },
+      { t: "Confirmation d'e-mail", d: "Lien avec jeton → compte activé + connexion", r: "/verifier" },
+      { t: "Mot de passe oublié → réinitialisation", d: "Demande puis lien /reinitialiser?token=… ; même réponse pour un compte inconnu", r: "/mot-de-passe-oublie" },
+      { t: "Faux profil LinkedIn", d: "Page de démo pour tester l'extension Chrome sans toucher LinkedIn", r: "/demo/linkedin" },
+    ]},
+    { t: "Espace candidat", d: "Connexion : candidat@mail.com", k: 3, c: [
+      { t: "Accueil", k2: 1, c: [
+        { t: "Bandeau d'offres recommandées", d: "5 diapositives, défilement auto, barre de progression, bouton pause, « Voir l'offre »", r: "/candidat" },
+        { t: "Fil d'actualité", d: "Publier, J'aime, Commenter, Republier, Enregistrer ; « Éléments enregistrés »", r: "/candidat" },
+        { t: "Colonnes fixes", d: "En défilant (écran large), seul le fil bouge ; profil à gauche et À faire / Candidatures à droite restent en place", r: "/candidat" },
+        { t: "Recherche du bandeau", d: "Icône Recherche (rail) → taper un mot : le fil est filtré", r: "/candidat" },
+        { t: "À faire / Mes candidatures", d: "Tests, messages non lus, entretiens ; 3 dernières candidatures avec leur étape", r: "/candidat" },
+      ]},
+      { t: "Emplois", c: [
+        { t: "Onglets", d: "Meilleurs matchs · Plus récentes · Enregistrées · Candidatures", r: "/candidat/emplois" },
+        { t: "Filtres", d: "Remote, contrat, lieu, recherche ; liens ?remote=1 ?contract=Stage ?place=Tunis ?tab=applied", r: "/candidat/emplois?remote=1" },
+        { t: "Détail + analyse de correspondance", d: "Panneau de droite : score, mots-clés présents/manquants", r: "/candidat/emplois" },
+        { t: "Postuler / enregistrer ♡", d: "Une candidature crée une carte au stade Sourcing côté recruteur", r: "/candidat/emplois" },
+      ]},
+      { t: "Offres recommandées", d: "Classement + compétences que vous avez en vert", r: "/candidat/recommandations" },
+      { t: "Profil", c: [
+        { t: "Identité et à propos", d: "Titre, lieu, résumé, liens ; Force du profil", r: "/candidat/profil" },
+        { t: "Photo et couverture", d: "Téléverser une image (jpg/png/webp), elle apparaît partout", r: "/candidat/profil" },
+        { t: "Expériences / formations / compétences", d: "Ajouter, modifier, supprimer", r: "/candidat/profil" },
+      ]},
+      { t: "Créateur de CV", c: [
+        { t: "Parcours en 8 étapes", d: "Modèle · Identité · Expérience · Formation · Compétences · Projets · Résumé · Révision ; coches de progression", r: "/candidat/cv-builder" },
+        { t: "Aperçu A4 en direct", d: "Mise à jour à chaque frappe ; marqueurs de saut de page ; onglets Éditer/Aperçu sur mobile", r: "/candidat/cv-builder" },
+        { t: "Modèles et couleurs", d: "Classique · Moderne · Compact ; 6 couleurs ; masquer des sections", r: "/candidat/cv-builder" },
+        { t: "Enregistrement automatique", d: "Pastille : Enregistré / en cours / Échec + Réessayer ; pas de doublons", r: "/candidat/cv-builder" },
+        { t: "Aides à l'écriture", d: "Suggestions de résumé, conseils par ligne, « Nettoyer mes réalisations »", r: "/candidat/cv-builder?step=resume" },
+        { t: "Révision et export", d: "Score, À améliorer (Corriger), couverture d'une offre cible, PDF (impression), Copier le texte, Publier sur mon profil", r: "/candidat/cv-builder?step=export" },
+      ]},
+      { t: "Votre CV (analyse par offre)", d: "Dépôt fichier/texte, score par offre, filtres, « Adapter à cette offre », Postuler", r: "/candidat/cv" },
+      { t: "Analyse ATS", d: "Score, À corriger → Corriger (ouvre la bonne étape), glisser-déposer d'un CV", r: "/candidat/ats" },
+      { t: "Écarts de compétences", d: "Coller une offre → écart ; « Je la maîtrise » ajoute au profil ; Face au marché", r: "/candidat/competences" },
+      { t: "Salaire", d: "Choix du marché, barre de fourchette, demande (validation min < max), « Reprendre la fourchette »", r: "/candidat/salaire" },
+      { t: "Visibilité (candidature inversée)", d: "Interrupteurs vivier / masquer le nom, aperçu recruteur, qui a consulté", r: "/candidat/visibilite" },
+      { t: "Entretien IA", d: "Entraînement libre ou par candidature, 5 questions, score, historique, Reprendre", r: "/candidat/entretien" },
+      { t: "Tests", d: "À passer / Terminés ; QCM, code (bac à sable JS), culture ; « Rendre le test »", r: "/candidat/tests" },
+      { t: "Messages", d: "Conversations avec les recruteurs ; interrupteur « m'avertir par e-mail »", r: "/candidat/messages" },
+    ]},
+    { t: "Espace recruteur", d: "Connexion : recruteur@atlas.tech", k: 4, c: [
+      { t: "Accueil", d: "Bandeau défilant, statistiques, graphiques, offres", r: "/recruteur" },
+      { t: "Offres", c: [
+        { t: "Créer une offre", d: "Brouillon assisté par l'IA (modèle ou gabarit), compétences requises", r: "/recruteur/offres" },
+        { t: "Gérer une offre", d: "Publier / mettre en pause / clore ; modifier ; voir le pipeline", r: "/recruteur/offres" },
+      ]},
+      { t: "Pipeline (Kanban)", c: [
+        { t: "Colonnes et déplacement", d: "Sourcing → Présélection → Entretien → Test → Offre → Engagé / Refusé ; glisser-déposer ou liste déroulante", r: "/recruteur/offres" },
+        { t: "Dossier candidat (tiroir)", d: "Score, notes d'équipe, assigner des tests, inviter à l'entretien IA, écrire au candidat", r: "/recruteur/offres" },
+        { t: "Profil importé", d: "Texte gris RGPD ; pas d'e-mail fictif ni de bouton Écrire", r: "/recruteur/sourcing" },
+      ]},
+      { t: "Matching", d: "Candidats classés pour une offre, profils proches", r: "/recruteur/offres" },
+      { t: "Vivier", c: [
+        { t: "Recherche de talents", d: "Facettes compétences/lieu, tolérance aux fautes, surbrillance ; repli PostgreSQL si Meilisearch est absent", r: "/recruteur/sourcing" },
+        { t: "Importer un profil", d: "Coller le texte d'un profil → ajouté à une offre avec son score", r: "/recruteur/sourcing" },
+        { t: "Derniers imports", d: "Liste des profils sourcés (LinkedIn / texte)", r: "/recruteur/sourcing" },
+      ]},
+      { t: "CVthèque", d: "CV déposés, filtre par compétence, recherche du bandeau, fiche détaillée", r: "/recruteur/cvtheque" },
+      { t: "Messages", d: "Écrire à un candidat, non lus, e-mail de notification limité dans le temps", r: "/recruteur/messages" },
+      { t: "Équipe", d: "Inviter un collègue (lien de choix du mot de passe), liste des membres", r: "/recruteur/equipe" },
+      { t: "Profil entreprise", d: "Fiche entreprise et ses offres", r: "/recruteur/profil" },
+      { t: "Isolation entre entreprises", d: "Avec le compte ESPRIT : on ne voit ni les offres, ni les candidats, ni les pipelines d'Atlas", r: "/login" },
+    ]},
+    { t: "Administration", d: "Connexion : admin@nextgen.hr", k: 5, c: [
+      { t: "Statistiques", d: "Chiffres globaux ; réindexation des vecteurs IA", r: "/admin" },
+      { t: "Annonces", d: "Modération : changer le statut d'une offre", r: "/admin/annonces" },
+      { t: "Conformité RGPD", d: "Anonymisation d'un utilisateur, journal d'audit", r: "/admin/conformite" },
+      { t: "Accès refusé aux autres rôles", d: "Un candidat ou un recruteur qui ouvre /admin est renvoyé vers son espace", r: "/admin" },
+    ]},
+    { t: "Extension Chrome", d: "Dossier apps/extension", k: 6, c: [
+      { t: "Installer", d: "chrome://extensions → Mode développeur → Charger l'extension non empaquetée → apps/extension", cp: "chrome://extensions" },
+      { t: "Connexion dans la fenêtre", d: "Compte recruteur ; mauvais mot de passe → message ; le mot de passe n'est pas conservé" },
+      { t: "Lire un profil", d: "Sur /demo/linkedin : nom, titre, lieu, 2 expériences, 9 compétences", r: "/demo/linkedin" },
+      { t: "Ajouter au pipeline", d: "Choisir l'offre → score de correspondance → « Ouvrir le pipeline »" },
+      { t: "Cas limites", d: "Doublon → message ; page non LinkedIn → avertissement ; page du navigateur → message clair" },
+      { t: "Réglages (⚙)", d: "Adresse de l'API et du site ; adresse non locale → demande d'autorisation" },
+      { t: "Sur un vrai profil LinkedIn", d: "Non testé : les sélecteurs sont approximatifs ; repli = sélectionner le texte avant d'ouvrir" },
+    ]},
+    { t: "Transversal", d: "À vérifier partout", k: 7, c: [
+      { t: "Mobile (≤ 768 px)", d: "Barre du haut + menu tiroir, aucun défilement horizontal, onglets Éditer/Aperçu du CV" },
+      { t: "Grand écran (≥ 1024 px)", d: "Texte plus dense (14 px), colonnes de l'accueil fixes" },
+      { t: "Accès croisés", d: "Un candidat sur /recruteur, un recruteur sur /candidat : renvoi vers son espace" },
+      { t: "Déconnexion / session", d: "« Sortir » ; jeton invalide → retour à la connexion", r: "/login" },
+      { t: "Recherche du bandeau", d: "Emplois, fil, CVthèque et Vivier filtrent avec le champ du bandeau" },
+    ]},
+    { t: "API et technique", d: "http://localhost:4100/api", k: 8, c: [
+      { t: "Santé", d: "GET /api/health → {\"status\":\"ok\"}", cp: "http://localhost:4100/api/health", r: "" },
+      { t: "Modules", d: "auth · jobs · candidates · applications · ai · interviews · assessments · messages · sourcing · feed · recruiters · admin · health" },
+      { t: "Tests automatiques", d: "cd apps/api && npm test (57 tests ; les 10 d'intégration demandent ESPRIT_PASSWORD)", cp: "cd apps/api && npm test" },
+      { t: "Données de démo", d: "npm run seed (efface tout !) · npm run seed:demo · npm run seed:demo:remove", cp: "npm run seed:demo" },
+      { t: "Limitation de requêtes (production)", d: "10 connexions/min/IP puis 429 — active seulement avec NODE_ENV=production ou THROTTLE_ENABLED=true" },
+    ]},
+    { t: "Mise en ligne", d: "Voir DEPLOY.md", k: 9, c: [
+      { t: "Pile Docker de production", d: "docker-compose.prod.yml : Postgres+pgvector, Meilisearch, API, site, Caddy (HTTPS)", cp: "docker compose -f docker-compose.prod.yml up -d --build" },
+      { t: "Premier administrateur", d: "npm run admin:create avec ADMIN_EMAIL et ADMIN_PASSWORD" },
+      { t: "Reste à faire", d: "Serveur + domaine, messagerie (SMTP/Resend), sauvegardes, mentions légales et politique de confidentialité, dépôt GitHub en privé" },
+    ]},
+  ],
+};
+
+const KEY = "humaniq-carte-v1";
+let done = {}; try { done = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { done = {}; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(done)); } catch {} };
+const COLORS = { 1: "--b1", 2: "--b2", 3: "--b3", 4: "--b4", 5: "--b5", 6: "--b6", 7: "--b7", 8: "--b8", 9: "--b9" };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const $ = (s) => document.querySelector(s);
+const leaves = [];
+let filter = "all", term = "";
+
+function build(node, path, color, depth, ctx = "") {
+  const wrap = el("div", "node");
+  const row = el("div", "row");
+  const kids = node.c;
+  const id = path.join(">");
+  if (depth === 0) {
+    const b = el("div", "box root"); b.append(el("span", "", node.t)); row.append(b);
+  } else if (kids) {
+    const b = el("div", "box branch"); b.style.setProperty("--c", color);
+    const chev = el("span", "chev", "▾");
+    const tx = el("span"); tx.append(el("span", "t", node.t));
+    if (node.d) tx.append(el("span", "d", node.d));
+    const cnt = el("span", "cnt"); b.append(chev, tx, cnt);
+    b.dataset.count = id; b.tabIndex = 0; b.setAttribute("role", "button");
+    const toggle = () => { wrap.classList.toggle("collapsed"); wrap.querySelector(":scope > .kids").classList.toggle("hidden"); chev.textContent = wrap.classList.contains("collapsed") ? "▸" : "▾"; };
+    b.addEventListener("click", toggle);
+    b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    row.append(b);
+  } else {
+    const b = el("label", "box"); b.style.setProperty("--c", color);
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = !!done[id]; cb.setAttribute("aria-label", node.t);
+    cb.addEventListener("change", () => { done[id] = cb.checked || undefined; if (!cb.checked) delete done[id]; save(); refresh(); });
+    const tx = el("span"); tx.append(el("span", "t", node.t)); if (node.d) tx.append(el("span", "d", node.d));
+    b.append(cb, tx);
+    if (node.r != null && node.r !== "") { const a = el("a", "go", "↗"); a.title = "Ouvrir la page"; a.target = "_blank"; a.rel = "noopener"; a.dataset.r = node.r; a.addEventListener("click", (e) => e.stopPropagation()); b.append(a); }
+    if (node.cp) { const c = el("button", "cp", "copier"); c.type = "button"; c.title = node.cp; c.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); navigator.clipboard?.writeText(node.cp).then(() => { c.textContent = "copié ✓"; setTimeout(() => (c.textContent = "copier"), 1200); }).catch(() => {}); }); b.append(c); }
+    leaves.push({ id, cb, box: b, node, ctx });
+    row.append(b);
+  }
+  wrap.append(row);
+  if (kids) {
+    const k = el("div", "kids");
+    kids.forEach((child, i) => { const kid = el("div", "kid"); kid.style.setProperty("--c", color); kid.append(build(child, path.concat(i), depth === 0 ? `var(${COLORS[child.k] || "--b7"})` : color, depth + 1, ctx + " " + node.t)); k.append(kid); });
+    wrap.append(k);
+  }
+  return wrap;
+}
+
+function refresh() {
+  const base = $("#base").value.replace(/\/$/, "");
+  document.querySelectorAll("a.go").forEach((a) => (a.href = base + a.dataset.r));
+  const t = term.trim().toLowerCase();
+  let total = 0, ok = 0;
+  leaves.forEach((l) => {
+    total++; const isDone = !!done[l.id]; if (isDone) ok++;
+    l.box.classList.toggle("done", isDone);
+    const text = (l.ctx + " " + l.node.t + " " + (l.node.d || "")).toLowerCase();
+    const show = (filter === "all" || (filter === "done" ? isDone : !isDone)) && (!t || text.includes(t));
+    l.show = show;
+  });
+  // masque les kids sans feuille visible
+  const visit = (wrap) => {
+    const kidsEl = wrap.querySelector(":scope > .kids");
+    if (!kidsEl) { const l = leaves.find((x) => x.box === wrap.querySelector(":scope > .row > .box")); return l ? l.show : true; }
+    let any = false, n = 0, d = 0;
+    kidsEl.querySelectorAll(":scope > .kid").forEach((kid) => { const r = visit(kid.firstElementChild); kid.classList.toggle("hide", !r); any = any || r; });
+    wrap.querySelectorAll("label.box").forEach(() => {});
+    const cnt = wrap.querySelector(":scope > .row .cnt");
+    if (cnt) { const ls = leaves.filter((l) => wrap.contains(l.box)); n = ls.length; d = ls.filter((l) => done[l.id]).length; cnt.textContent = d + "/" + n; }
+    return any;
+  };
+  const rootWrap = $("#tree > .node");
+  if (rootWrap) { visit(rootWrap); }
+  $("#bar").style.width = (total ? (ok / total) * 100 : 0) + "%";
+  $("#total").textContent = ok + " / " + total + " testés";
+}
+
+$("#tree").append(build(DATA, [], "var(--line)", 0));
+refresh();
+
+document.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { filter = b.dataset.f; document.querySelectorAll("[data-f]").forEach((x) => x.classList.toggle("on", x === b)); refresh(); }));
+$("#q").addEventListener("input", (e) => { term = e.target.value; if (term.trim()) setAll(true); refresh(); });
+$("#base").addEventListener("input", refresh);
+const setAll = (open) => document.querySelectorAll(".node").forEach((n) => { const k = n.querySelector(":scope > .kids"); if (!k || n.parentElement.id === "tree") return; n.classList.toggle("collapsed", !open); k.classList.toggle("hidden", !open); const ch = n.querySelector(":scope > .row .chev"); if (ch) ch.textContent = open ? "▾" : "▸"; });
+$("#expand").addEventListener("click", () => setAll(true));
+$("#collapse").addEventListener("click", () => setAll(false));
+$("#view").addEventListener("click", (e) => { document.body.classList.toggle("list"); e.target.textContent = document.body.classList.contains("list") ? "Vue carte" : "Vue liste"; });
+$("#reset").addEventListener("click", () => { if (confirm("Tout décocher ?")) { done = {}; save(); leaves.forEach((l) => (l.cb.checked = false)); refresh(); } });
+setAll(false); // vue d'ensemble au départ : la racine et ses branches ; on déplie ce qu'on teste
+if (matchMedia("(max-width: 760px)").matches) { document.body.classList.add("list"); $("#view").textContent = "Vue carte"; }
+</script>
+</body>
+</html>
