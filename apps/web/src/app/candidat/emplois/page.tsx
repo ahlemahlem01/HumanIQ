@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
+import { CompanyLogo } from "@/components/company-logo";
 import { AppShell, useShellSearch } from "@/components/app-shell";
 import { MatchInsight, type MatchData } from "@/components/match-insight";
 import { api, STAGE_LABEL } from "@/lib/api";
@@ -20,7 +21,7 @@ type Job = {
   currency: string;
   requiredSkills: string[];
   createdAt: string;
-  company: { name: string };
+  company: { name: string; logoUrl?: string | null };
 };
 
 type Recommendation = {
@@ -245,9 +246,7 @@ function JobsContent() {
                       active ? "border-forest bg-tint/60" : "border-transparent hover:bg-paper"
                     }`}
                   >
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-sm font-bold text-forest">
-                      {initials(job.company.name)}
-                    </span>
+                    <CompanyLogo company={job.company} className="h-12 w-12 rounded-lg text-sm" />
                     <button type="button" onClick={() => setSelectedId(job.id)} className="min-w-0 flex-1 text-left">
                       <span className="block truncate text-[15px] font-semibold text-forest">{job.title}</span>
                       <span className="block truncate text-sm">{job.company.name}</span>
@@ -279,9 +278,7 @@ function JobsContent() {
           {selected ? (
             <article className="hidden rounded-2xl border border-line bg-white p-7 lg:sticky lg:top-20 lg:block">
               <div className="flex items-start gap-4">
-                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-lg font-bold text-forest">
-                  {initials(selected.company.name)}
-                </span>
+                <CompanyLogo company={selected.company} className="h-16 w-16 rounded-xl text-lg" />
                 <div className="min-w-0">
                   <h2 className="text-2xl font-semibold leading-tight">{selected.title}</h2>
                   <p className="mt-1 text-sm">{selected.company.name}</p>

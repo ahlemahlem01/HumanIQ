@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { CompanyLogo } from "@/components/company-logo";
 import { SiteHeader } from "@/components/site-header";
 import { api } from "@/lib/api";
 
@@ -15,7 +16,7 @@ type Job = {
   salaryMax: number | null;
   currency: string;
   requiredSkills: string[];
-  company: { name: string };
+  company: { name: string; logoUrl?: string | null };
 };
 
 function salary(job: Job) {
@@ -120,7 +121,10 @@ export default function JobsPage() {
               {visible.map((job) => (
                 <li key={job.id} className="border-b border-line last:border-b-0">
                   <Link href={`/offres/${job.id}`} className="block p-5 hover:bg-paper">
-                    <p className="text-xs text-sage">{job.company.name}</p>
+                    <p className="flex items-center gap-2 text-xs text-sage">
+                      <CompanyLogo company={job.company} className="h-6 w-6 rounded text-[10px]" />
+                      {job.company.name}
+                    </p>
                     <h2 className="mt-1 text-lg font-semibold text-forest">{job.title}</h2>
                     <p className="mt-1 text-sm text-sage">
                       {[job.contractType, salary(job), `${job.location}${job.remote ? " · Télétravail" : ""}`]

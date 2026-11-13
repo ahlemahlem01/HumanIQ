@@ -197,7 +197,7 @@ export class JobsService {
 }
 
 const publicJobInclude = {
-  company: { select: { name: true, slug: true, plan: true } },
+  company: { select: { name: true, slug: true, plan: true, logoUrl: true } },
   recruiter: { select: { title: true, user: { select: { firstName: true, lastName: true } } } },
 } satisfies Prisma.JobInclude;
 

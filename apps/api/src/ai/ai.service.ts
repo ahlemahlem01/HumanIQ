@@ -176,7 +176,7 @@ export class AiService {
 
     const jobs = await this.prisma.job.findMany({
       where: { status: "PUBLISHED", company: { verifiedAt: { not: null } } },
-      include: { company: { select: { name: true } } },
+      include: { company: { select: { name: true, logoUrl: true } } },
       orderBy: { createdAt: "desc" },
       take: 40,
     });
@@ -448,7 +448,7 @@ export class AiService {
     const [jobs, profile] = await Promise.all([
       this.prisma.job.findMany({
         where: { id: { in: hits.map((hit) => hit.id) }, status: "PUBLISHED", company: { verifiedAt: { not: null } } },
-        include: { company: { select: { name: true } } },
+        include: { company: { select: { name: true, logoUrl: true } } },
       }),
       this.prisma.candidateProfile.findUnique({ where: { id: candidateId } }),
     ]);

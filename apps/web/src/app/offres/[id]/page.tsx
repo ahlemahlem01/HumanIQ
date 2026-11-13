@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { CompanyLogo } from "@/components/company-logo";
 import { MatchInsight } from "@/components/match-insight";
 import { SiteHeader } from "@/components/site-header";
 import { api } from "@/lib/api";
@@ -18,7 +19,7 @@ type Job = {
   salaryMin: number | null;
   salaryMax: number | null;
   requiredSkills: string[];
-  company: { name: string; description: string | null };
+  company: { name: string; description: string | null; logoUrl?: string | null };
 };
 
 type Match = {
@@ -94,7 +95,10 @@ export default function JobDetailPage() {
         </Link>
         <div className="mt-4 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <article className="rounded-2xl border border-line bg-white p-8">
-            <p className="text-sm font-medium text-forest">{job.company.name}</p>
+            <p className="flex items-center gap-3 text-sm font-medium text-forest">
+              <CompanyLogo company={job.company} className="h-10 w-10 rounded-lg text-xs" />
+              {job.company.name}
+            </p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight">{job.title}</h1>
             <div className="mt-4 flex flex-wrap gap-2 text-sm">
               <span className="rounded-full bg-tint px-3 py-1 font-medium text-forest">{job.contractType}</span>
@@ -158,7 +162,10 @@ export default function JobDetailPage() {
 
             <section className="rounded-2xl border border-line bg-white p-6">
               <h2 className="text-sm font-semibold">À propos de l&apos;entreprise</h2>
-              <p className="mt-2 text-lg font-semibold">{job.company.name}</p>
+              <div className="mt-2 flex items-center gap-3">
+                <CompanyLogo company={job.company} className="h-12 w-12 rounded-lg text-sm" />
+                <p className="text-lg font-semibold">{job.company.name}</p>
+              </div>
               {job.company.description ? (
                 <p className="mt-2 text-sm leading-6 text-sage">{job.company.description}</p>
               ) : null}
