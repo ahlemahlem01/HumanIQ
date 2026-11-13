@@ -24,7 +24,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./package.json
 COPY prisma ./prisma
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh && mkdir -p uploads/avatars uploads/covers private/cv && chown -R node:node /app/uploads /app/private
+RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh && mkdir -p uploads/avatars uploads/covers uploads/logos private/cv && chown -R node:node /app/uploads /app/private
 USER node
 EXPOSE 4100
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

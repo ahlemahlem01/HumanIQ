@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Inject, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 import { Role } from "@prisma/client";
@@ -83,6 +83,19 @@ export class RecruitersController {
   @Patch("company")
   updateCompany(@Req() req: { user: { recruiter: { id: string } } }, @Body() dto: UpdateCompanyDto) {
     return this.recruiters.updateCompany(req.user.recruiter.id, dto);
+  }
+
+  @Roles(Role.RECRUITER)
+  @Post("company/logo")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 2 * 1024 * 1024 } }))
+  setLogo(@Req() req: { user: { recruiter: { id: string } } }, @UploadedFile() file?: Express.Multer.File) {
+    return this.recruiters.setCompanyLogo(req.user.recruiter.id, file);
+  }
+
+  @Roles(Role.RECRUITER)
+  @Delete("company/logo")
+  removeLogo(@Req() req: { user: { recruiter: { id: string } } }) {
+    return this.recruiters.removeCompanyLogo(req.user.recruiter.id);
   }
 
   @Roles(Role.RECRUITER)

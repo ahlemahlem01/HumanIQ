@@ -21,7 +21,7 @@ type Profile = {
   location: string | null;
   phone: string | null;
   avatarImage: string | null;
-  company: { name: string; description: string | null; website: string | null; verifiedAt?: string | null };
+  company: { name: string; description: string | null; website: string | null; logoUrl?: string | null; verifiedAt?: string | null };
   user: { firstName: string; lastName: string; email: string };
   jobs: Job[];
 };
@@ -64,6 +64,32 @@ export default function RecruiterProfilePage() {
   const [editingCompany, setEditingCompany] = useState(false);
   const [companyError, setCompanyError] = useState("");
   const [companySaving, setCompanySaving] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
+
+  async function uploadLogo(file: File) {
+    if (!token) return;
+    setLogoBusy(true);
+    setCompanyError("");
+    try {
+      setProfile(await upload<Profile>("/recruiters/company/logo", file, { token }));
+    } catch (err) {
+      setCompanyError(err instanceof Error ? err.message : "Logo impossible à envoyer.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    if (!token) return;
+    setLogoBusy(true);
+    try {
+      setProfile(await api<Profile>("/recruiters/company/logo", { method: "DELETE", token }));
+    } catch (err) {
+      setCompanyError(err instanceof Error ? err.message : "Suppression impossible.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem("nextgen_token");
@@ -393,6 +419,38 @@ export default function RecruiterProfilePage() {
             </div>
             {editingCompany ? (
               <form onSubmit={saveCompany} className="mt-3 space-y-3 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-white text-xs font-bold">
+                    {profile.company.logoUrl ? (
+                      <img src={mediaUrl(profile.company.logoUrl)} alt="" className="h-full w-full object-contain" />
+                    ) : (
+                      initialsOf(profile.company.name)
+                    )}
+                  </span>
+                  <div className="flex flex-col items-start gap-1">
+                    <label className="cursor-pointer font-semibold text-forest hover:underline">
+                      {logoBusy ? "Envoi…" : profile.company.logoUrl ? "Changer le logo" : "Ajouter un logo"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="sr-only"
+                        disabled={logoBusy}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+                          if (file) void uploadLogo(file);
+                        }}
+                      />
+                    </label>
+                    {profile.company.logoUrl ? (
+                      <button type="button" disabled={logoBusy} onClick={() => void removeLogo()} className="text-xs text-sage hover:text-red-700">
+                        Retirer le logo
+                      </button>
+                    ) : (
+                      <span className="text-xs text-sage">JPG, PNG ou WebP, 2 Mo maximum.</span>
+                    )}
+                  </div>
+                </div>
                 <label className="block font-medium">
                   Nom
                   <input
@@ -447,8 +505,12 @@ export default function RecruiterProfilePage() {
             ) : (
               <>
             <p className="mt-3 flex items-center gap-3 text-sm font-semibold">
-              <span className="flex h-10 w-10 items-center justify-center rounded-md border border-line bg-paper text-xs font-bold">
-                {initialsOf(profile.company.name)}
+              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-line bg-paper text-xs font-bold">
+                {profile.company.logoUrl ? (
+                  <img src={mediaUrl(profile.company.logoUrl)} alt="" className="h-full w-full object-contain" />
+                ) : (
+                  initialsOf(profile.company.name)
+                )}
               </span>
               {profile.company.name}
             </p>

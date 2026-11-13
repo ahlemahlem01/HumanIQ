@@ -8,6 +8,7 @@ import { AuthService } from "../auth/auth.service";
 import { companyIdOf } from "./company-scope";
 
 const AVATAR_DIR = join(process.cwd(), "uploads", "avatars");
+const LOGO_DIR = join(process.cwd(), "uploads", "logos");
 const IMAGE_TYPES: Record<string, string> = {
   "image/jpeg": ".jpg",
   "image/png": ".png",
@@ -156,6 +157,42 @@ export class RecruitersService {
     return this.getMe(recruiterId);
   }
 
+  /** The real file type is checked from the first bytes: the media type sent by the browser is not trusted. */
+  private imageKind(buffer: Buffer): ".jpg" | ".png" | ".webp" | null {
+    if (buffer.length > 12 && buffer[0] === 0xff && buffer[1] === 0xd8) return ".jpg";
+    if (buffer.length > 12 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return ".png";
+    if (buffer.length > 12 && buffer.subarray(0, 4).toString() === "RIFF" && buffer.subarray(8, 12).toString() === "WEBP") return ".webp";
+    return null;
+  }
+
+  async setCompanyLogo(recruiterId: string, file?: { buffer: Buffer; size: number }) {
+    const ext = file?.buffer?.length ? this.imageKind(file.buffer) : null;
+    if (!file || !ext) throw new BadRequestException("Choisissez une image JPG, PNG ou WebP.");
+    if (file.size > 2 * 1024 * 1024) throw new BadRequestException("Le logo doit faire moins de 2 Mo.");
+    const companyId = await companyIdOf(this.prisma, recruiterId);
+    const current = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { logoUrl: true } });
+    await mkdir(LOGO_DIR, { recursive: true });
+    // A new name each time, so browsers do not keep showing the previous logo.
+    const name = `${companyId}-${Date.now().toString(36)}${ext}`;
+    await writeFile(join(LOGO_DIR, name), file.buffer);
+    await this.prisma.company.update({ where: { id: companyId }, data: { logoUrl: `/uploads/logos/${name}` } });
+    await this.dropLogoFile(current.logoUrl);
+    return this.getMe(recruiterId);
+  }
+
+  async removeCompanyLogo(recruiterId: string) {
+    const companyId = await companyIdOf(this.prisma, recruiterId);
+    const current = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { logoUrl: true } });
+    await this.prisma.company.update({ where: { id: companyId }, data: { logoUrl: null } });
+    await this.dropLogoFile(current.logoUrl);
+    return this.getMe(recruiterId);
+  }
+
+  private async dropLogoFile(logoUrl: string | null) {
+    const name = logoUrl?.startsWith("/uploads/logos/") ? logoUrl.slice("/uploads/logos/".length) : null;
+    if (name && /^[\w.-]+$/.test(name)) await unlink(join(LOGO_DIR, name)).catch(() => undefined);
+  }
+
   async updateMe(
     recruiterId: string,
     data: { title?: string; bio?: string; location?: string; phone?: string },
@@ -207,7 +244,7 @@ const profileSelect = {
   location: true,
   phone: true,
   avatarImage: true,
-  company: { select: { name: true, description: true, website: true, verifiedAt: true } },
+  company: { select: { name: true, description: true, website: true, logoUrl: true, verifiedAt: true } },
   user: { select: { firstName: true, lastName: true, email: true } },
   jobs: {
     orderBy: { createdAt: "desc" as const },
