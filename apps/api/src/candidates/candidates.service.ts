@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { EmbeddingsService } from "../ai/embeddings.service";
 import { SearchService, type TalentDoc } from "../search/search.module";
 import { sanitizeCvSettings } from "./cv-settings";
+import { hasCvFile, readCvFile } from "./cv-storage";
 
 const COVER_DIR = join(process.cwd(), "uploads", "covers");
 const AVATAR_DIR = join(process.cwd(), "uploads", "avatars");
@@ -515,6 +516,25 @@ export class CandidatesService {
       }));
   }
 
+  /** Original CV file of a candidate, for recruiters. */
+  async cvFile(candidateId: string, viewerId: string) {
+    const row = await this.prisma.candidateProfile.findFirst({
+      where: { id: candidateId, user: { anonymizedAt: null, role: "CANDIDATE" } },
+      select: { id: true, cvFileName: true, cvMimeType: true },
+    });
+    if (!row || !hasCvFile(row.id)) throw new NotFoundException("Aucun fichier de CV déposé.");
+    await this.prisma.profileView.upsert({
+      where: { candidateId_viewerId: { candidateId, viewerId } },
+      create: { candidateId, viewerId },
+      update: { count: { increment: 1 }, viewedAt: new Date() },
+    });
+    return {
+      buffer: await readCvFile(row.id),
+      fileName: row.cvFileName ?? "cv",
+      mimeType: row.cvMimeType ?? "application/octet-stream",
+    };
+  }
+
   async libraryOne(candidateId: string, viewerId: string) {
     const row = await this.prisma.candidateProfile.findFirst({
       where: {
@@ -544,6 +564,7 @@ export class CandidatesService {
       experienceYears: row.experienceYears,
       skills: row.skills,
       fileName: row.cvFileName,
+      hasFile: hasCvFile(row.id),
       cvText: row.cvText,
       experiences: row.experiences.map((item) => ({
         id: item.id,

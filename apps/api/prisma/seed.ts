@@ -121,6 +121,7 @@ async function main() {
     data: {
       name: "Atlas Labs",
       slug: "atlas-labs",
+      verifiedAt: new Date(),
       description: "Produit data & IA pour l'industrie.",
       website: "https://atlas-labs.example",
       plan: "GROWTH",
@@ -248,6 +249,7 @@ async function main() {
     data: {
       name: "ESPRIT",
       slug: "esprit",
+      verifiedAt: new Date(),
       description: "École supérieure privée d'ingénierie et de technologie.",
       plan: "STARTER",
       subscriptionStatus: "active",

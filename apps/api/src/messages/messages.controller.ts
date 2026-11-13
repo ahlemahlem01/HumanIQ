@@ -3,6 +3,7 @@ import { Role } from "@prisma/client";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { VerifiedCompanyGuard } from "../auth/verified-company.guard";
 import { MessagesService, type Viewer } from "./messages.service";
 
 type Req = { user: Viewer };
@@ -44,12 +45,14 @@ export class MessagesController {
   }
 
   @Roles(Role.RECRUITER)
+  @UseGuards(VerifiedCompanyGuard)
   @Get("prospect/:candidateId")
   prospect(@Req() req: Req, @Param("candidateId") candidateId: string) {
     return this.messages.prospect(req.user, candidateId);
   }
 
   @Roles(Role.RECRUITER)
+  @UseGuards(VerifiedCompanyGuard)
   @Post("start")
   start(@Req() req: Req, @Body() dto: { candidateId?: string; jobId?: string; body?: string }) {
     return this.messages.start(req.user, dto);

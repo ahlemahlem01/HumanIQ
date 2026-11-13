@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { EmbeddingsService } from "../ai/embeddings.service";
 import { blendScores, scoreCvAgainstJob } from "../ai/matching";
 import { companyIdOf } from "../recruiters/company-scope";
+import { MessagesService } from "../messages/messages.service";
 
 const STAGES: ApplicationStage[] = [
   "SOURCING",
@@ -20,11 +21,12 @@ export class ApplicationsService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(EmbeddingsService) private embeddings: EmbeddingsService,
+    @Inject(MessagesService) private messages: MessagesService,
   ) {}
 
   async apply(candidateId: string, jobId: string, coverNote?: string) {
-    const job = await this.prisma.job.findUnique({ where: { id: jobId } });
-    if (!job || job.status !== "PUBLISHED") throw new NotFoundException("Offre indisponible.");
+    const job = await this.prisma.job.findUnique({ where: { id: jobId }, include: { company: { select: { verifiedAt: true } } } });
+    if (!job || job.status !== "PUBLISHED" || !job.company.verifiedAt) throw new NotFoundException("Offre indisponible.");
     const profile = await this.prisma.candidateProfile.findUnique({ where: { id: candidateId } });
     if (!profile) throw new NotFoundException("Profil candidat introuvable.");
 
@@ -198,6 +200,60 @@ export class ApplicationsService {
       where: { id: applicationId },
       data: { stage, kanbanOrder },
     });
+  }
+
+  /**
+   * Hires a candidate: the application moves to HIRED, the job is closed, every other open application is
+   * rejected, and each candidate gets a message in the in-app inbox (from the recruiter who hired).
+   */
+  async hire(applicationId: string, recruiterId: string, userId: string) {
+    const companyId = await companyIdOf(this.prisma, recruiterId);
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: { job: { include: { company: true } }, candidate: { include: { user: true } } },
+    });
+    if (!application || application.job.companyId !== companyId) {
+      throw new ForbiddenException("Candidature inaccessible.");
+    }
+    const job = application.job;
+    const others = await this.prisma.application.findMany({
+      where: { jobId: job.id, id: { not: applicationId }, stage: { notIn: ["HIRED", "REJECTED"] } },
+      include: { candidate: { include: { user: true } } },
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.application.update({ where: { id: applicationId }, data: { stage: "HIRED", kanbanOrder: 0 } }),
+      this.prisma.job.update({ where: { id: job.id }, data: { status: "CLOSED" } }),
+      ...(others.length
+        ? [this.prisma.application.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { stage: "REJECTED" } })]
+        : []),
+    ]);
+
+    const company = job.company.name;
+    const send = (candidateId: string, _firstName: string | null, body: string) =>
+      this.messages.postFromRecruiter(userId, companyId, candidateId, job.id, body);
+
+    const hiredName = application.candidate.user.firstName ?? "";
+    await send(
+      application.candidateId,
+      hiredName,
+      `Bonjour ${hiredName},
+
+Bonne nouvelle : ${company} a le plaisir de vous confier le poste « ${job.title} ». Nous reviendrons vers vous très prochainement pour les prochaines étapes.
+
+Félicitations et à bientôt !`,
+    );
+    for (const other of others) {
+      const name = other.candidate.user.firstName ?? "";
+      await send(
+        other.candidateId,
+        name,
+        `Bonjour ${name},
+
+Merci pour l'intérêt que vous avez porté au poste « ${job.title} » chez ${company}. Après étude des candidatures, nous avons retenu un autre profil et l'offre est désormais clôturée. Nous gardons votre dossier en mémoire et vous souhaitons plein succès dans vos recherches.`,
+      );
+    }
+    return { hired: applicationId, rejected: others.length, jobStatus: "CLOSED" };
   }
 
   private async ownedApplication(applicationId: string, recruiterId: string) {

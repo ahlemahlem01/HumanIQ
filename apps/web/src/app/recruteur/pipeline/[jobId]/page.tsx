@@ -90,6 +90,25 @@ export default function PipelinePage() {
   const [noteDraft, setNoteDraft] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
 
+  const [hireId, setHireId] = useState<string | null>(null);
+  const [hiring, setHiring] = useState(false);
+  const [hireError, setHireError] = useState("");
+
+  async function confirmHire() {
+    if (!token || !hireId) return;
+    setHiring(true);
+    setHireError("");
+    try {
+      await api(`/applications/${hireId}/hire`, { method: "POST", token });
+      setHireId(null);
+      await load();
+    } catch (err) {
+      setHireError(err instanceof Error ? err.message : "L'engagement n'a pas pu être enregistré.");
+    } finally {
+      setHiring(false);
+    }
+  }
+
   async function load() {
     if (!token) return;
     setData(await api<Pipeline>(`/applications/pipeline/${params.jobId}`, { token }));
@@ -101,6 +120,10 @@ export default function PipelinePage() {
 
   async function move(applicationId: string, stage: string) {
     if (!token) return;
+    if (stage === "HIRED") {
+      setHireId(applicationId);
+      return;
+    }
     await api(`/applications/${applicationId}/move`, {
       method: "PATCH",
       token,
@@ -536,6 +559,50 @@ export default function PipelinePage() {
             </div>
           </aside>
         </div>
+      ) : null}
+      {hireId ? (
+        (() => {
+          const user = (data?.columns.flatMap((column) => column.items) ?? []).find((item) => item.id === hireId)?.candidate.user;
+          const name = user ? `${user.firstName} ${user.lastName}` : "ce candidat";
+          return (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/30 p-4 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Confirmer l'engagement"
+              onClick={() => !hiring && setHireId(null)}
+            >
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-xl text-good">✓</span>
+                <h2 className="mt-4 text-xl font-semibold tracking-tight">Engager {name} ?</h2>
+                <ul className="mt-3 space-y-2 text-sm leading-6 text-sage">
+                  <li>• L&apos;offre sera clôturée : les candidats ne la verront plus.</li>
+                  <li>• Les autres candidats en cours passeront en « Refusé ».</li>
+                  <li>• Chacun recevra un message et un e-mail : félicitations pour {name}, réponse courtoise pour les autres.</li>
+                </ul>
+                {hireError ? <p className="mt-3 text-sm text-red-700">{hireError}</p> : null}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    disabled={hiring}
+                    onClick={() => setHireId(null)}
+                    className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold hover:border-forest disabled:opacity-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    disabled={hiring}
+                    onClick={() => void confirmHire()}
+                    className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-white hover:bg-forest-dark disabled:opacity-60"
+                  >
+                    {hiring ? "Envoi…" : "Confirmer l'engagement"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()
       ) : null}
     </AppShell>
   );

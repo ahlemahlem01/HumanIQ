@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { AppShell, useShellSearch } from "@/components/app-shell";
-import { SourcedNote } from "@/components/sourced-note";
+import { SourcingTabs } from "@/components/sourcing-tabs";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -35,24 +35,6 @@ type Job = { id: string; title: string; status: string };
 
 type Shortlist = { created: boolean };
 
-type ImportRow = {
-  id: string;
-  atsScore: number | null;
-  createdAt: string;
-  job: { id: string; title: string };
-  candidate: {
-    headline: string | null;
-    location: string | null;
-    skills: string[];
-    linkedinUrl: string | null;
-    source: string;
-    user: { firstName: string; lastName: string };
-  };
-};
-
-const fieldClass =
-  "w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none focus:border-forest focus:ring-2 focus:ring-forest/20";
-
 function SourcingPageContent() {
   const { token } = useAuth();
   const [result, setResult] = useState<SearchResult | null>(null);
@@ -62,10 +44,7 @@ function SourcingPageContent() {
   const [place, setPlace] = useState("");
   const [minYears, setMinYears] = useState("");
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [imports, setImports] = useState<ImportRow[]>([]);
   const [error, setError] = useState("");
-  const [ok, setOk] = useState("");
-  const [pending, setPending] = useState(false);
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
   const { query } = useShellSearch();
@@ -113,12 +92,7 @@ function SourcingPageContent() {
 
   async function load() {
     if (!token) return;
-    const [mine, recent] = await Promise.all([
-      api<Job[]>("/jobs/mine", { token }),
-      api<ImportRow[]>("/sourcing/imports", { token }),
-    ]);
-    setJobs(mine);
-    setImports(recent);
+    setJobs(await api<Job[]>("/jobs/mine", { token }));
   }
 
   useEffect(() => {
@@ -137,42 +111,11 @@ function SourcingPageContent() {
     setNotice(result.created ? "Profil ajouté aux candidatures." : "Ce profil est déjà dans cette offre.");
   }
 
-  async function onPaste(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token) return;
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    setPending(true);
-    setError("");
-    setOk("");
-    try {
-      const result = await api<{ atsScore: number | null; candidate: ImportRow["candidate"]; job: { title: string } }>(
-        "/sourcing/linkedin",
-        {
-          token,
-          body: {
-            jobId: String(form.get("jobId")),
-            linkedinUrl: String(form.get("linkedinUrl") || "") || undefined,
-            fullName: String(form.get("fullName") || "") || undefined,
-            headline: String(form.get("headline") || "") || undefined,
-            rawText: String(form.get("rawText")),
-          },
-        },
-      );
-      setOk(`${result.candidate.user.firstName} ${result.candidate.user.lastName} ajouté à « ${result.job.title} ».`);
-      formElement.reset();
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Import impossible.");
-    } finally {
-      setPending(false);
-    }
-  }
-
   return (
     <>
-      <div className="mx-auto grid max-w-[1180px] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mx-auto max-w-[1180px]">
         <div className="min-w-0">
+          <SourcingTabs active="vivier" />
           <header>
             <h1 className="text-3xl font-semibold tracking-tight">Vivier</h1>
             <p className="mt-1 max-w-xl text-sage">
@@ -378,86 +321,6 @@ function SourcingPageContent() {
           </ul>
         </div>
 
-        <aside className="space-y-3 lg:sticky lg:top-20">
-          <form onSubmit={onPaste} className="space-y-3 rounded-2xl border border-line bg-cream p-5">
-            <h2 className="text-lg font-semibold">Importer un profil</h2>
-            <p className="text-xs text-sage">Collez le texte d&apos;un profil LinkedIn pour l&apos;ajouter à une offre.</p>
-            <label className="block text-sm font-medium">
-              Offre
-              <select name="jobId" required className={`mt-1 ${fieldClass}`}>
-                {publishedJobs.map((job) => (
-                  <option key={job.id} value={job.id}>
-                    {job.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <input name="fullName" placeholder="Nom complet" className={fieldClass} />
-            <input name="headline" placeholder="Titre" className={fieldClass} />
-            <input name="linkedinUrl" placeholder="https://www.linkedin.com/in/…" className={fieldClass} />
-            <textarea
-              name="rawText"
-              required
-              minLength={20}
-              rows={6}
-              placeholder="Collez le texte du profil (à propos, expérience, compétences)…"
-              className={fieldClass}
-            />
-            <button disabled={pending} className="w-full rounded-full bg-forest py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-              {pending ? "Import…" : "Ajouter au pipeline"}
-            </button>
-            {error ? <p className="text-sm text-red-700">{error}</p> : null}
-            {ok ? <p className="text-sm text-good">{ok}</p> : null}
-            <SourcedNote />
-          </form>
-
-          <section className="rounded-2xl border border-line bg-cream p-5">
-            <h2 className="text-lg font-semibold">Derniers imports</h2>
-            <ul className="mt-3 space-y-4">
-              {imports.length === 0 ? (
-                <li className="text-sm text-sage">Aucun profil sourcé pour l&apos;instant.</li>
-              ) : (
-                imports.map((row) => (
-                  <li key={row.id} className="flex gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-tint text-xs font-semibold text-forest">
-                      {initials(`${row.candidate.user.firstName} ${row.candidate.user.lastName}`)}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {row.candidate.user.firstName} {row.candidate.user.lastName}
-                      </p>
-                      <p className="truncate text-xs text-sage">
-                        {row.candidate.source === "LINKEDIN" ? "LinkedIn" : "Texte"} · {row.job.title}
-                      </p>
-                      <Link href={`/recruteur/pipeline/${row.job.id}`} className="text-xs font-semibold text-forest hover:underline">
-                        Voir les candidatures
-                      </Link>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-          </section>
-
-          <details className="rounded-2xl border border-line bg-cream p-5 text-sm">
-            <summary className="cursor-pointer text-lg font-semibold">Extension Chrome</summary>
-            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sage">
-              <li>
-                Chrome → <code className="rounded bg-paper px-1">chrome://extensions</code> → Mode développeur
-              </li>
-              <li>
-                Charger l&apos;extension non empaquetée : dossier <code className="rounded bg-paper px-1">apps/extension</code>
-              </li>
-              <li>
-                Ouvrir{" "}
-                <Link href="/demo/linkedin" className="font-semibold text-forest hover:underline">
-                  la page démo LinkedIn
-                </Link>{" "}
-                (ou un vrai /in/…) → icône HumanIQ → connexion recruteur → Importer
-              </li>
-            </ol>
-          </details>
-        </aside>
       </div>
     </>
   );

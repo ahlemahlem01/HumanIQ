@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
-import { IsEnum, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsEnum, IsOptional, IsString } from "class-validator";
 import { JobStatus, Role } from "@prisma/client";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
@@ -15,6 +15,11 @@ class ModerateDto {
   note?: string;
 }
 
+class VerifyCompanyDto {
+  @IsBoolean()
+  verified!: boolean;
+}
+
 @Controller("admin")
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
@@ -24,6 +29,16 @@ export class AdminController {
   @Get("overview")
   overview() {
     return this.admin.overview();
+  }
+
+  @Get("companies")
+  companies() {
+    return this.admin.companies();
+  }
+
+  @Patch("companies/:id/verify")
+  verifyCompany(@Param("id") id: string, @Body() dto: VerifyCompanyDto) {
+    return this.admin.setCompanyVerified(id, dto.verified);
   }
 
   @Get("jobs")

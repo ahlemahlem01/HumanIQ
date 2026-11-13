@@ -171,7 +171,7 @@ const profileSelect = {
   location: true,
   phone: true,
   avatarImage: true,
-  company: { select: { name: true, description: true, website: true } },
+  company: { select: { name: true, description: true, website: true, verifiedAt: true } },
   user: { select: { firstName: true, lastName: true, email: true } },
   jobs: {
     orderBy: { createdAt: "desc" as const },

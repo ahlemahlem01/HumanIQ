@@ -25,6 +25,7 @@ export class JobsService {
           const jobs = await this.prisma.job.findMany({
             where: {
               status: JobStatus.PUBLISHED,
+              company: { verifiedAt: { not: null } },
               id: { in: semantic.map((hit) => hit.id) },
               ...locationFilter,
             },
@@ -44,6 +45,7 @@ export class JobsService {
     const hits = query ? await this.search.searchJobs(query) : null;
     const where: Prisma.JobWhereInput = {
       status: JobStatus.PUBLISHED,
+      company: { verifiedAt: { not: null } },
       ...locationFilter,
       ...(hits ? { id: { in: hits.map((h) => h.id) } } : {}),
       ...(!hits && query
@@ -69,6 +71,7 @@ export class JobsService {
     const job = await this.prisma.job.findFirst({
       where: {
         status: JobStatus.PUBLISHED,
+        company: { verifiedAt: { not: null } },
         OR: [{ id: idOrSlug }, { slug: idOrSlug }],
       },
       include: { company: true },

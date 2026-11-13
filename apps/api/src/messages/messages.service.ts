@@ -13,8 +13,6 @@ export type Viewer = {
 type Side = "RECRUITER" | "CANDIDATE";
 
 const MAX_BODY = 4000;
-/** If nobody opened the thread after an email, remind at most once per hour. */
-const RENOTIFY_AFTER_MS = 60 * 60 * 1000;
 
 function cleanBody(body: unknown) {
   if (typeof body !== "string") throw new BadRequestException("Message invalide.");
@@ -67,13 +65,6 @@ export class MessagesService {
       if (!conversation) return;
 
       const to: Side = from === "RECRUITER" ? "CANDIDATE" : "RECRUITER";
-      const readAt = to === "CANDIDATE" ? conversation.candidateReadAt : conversation.recruiterReadAt;
-      const notifiedAt = to === "CANDIDATE" ? conversation.candidateNotifiedAt : conversation.recruiterNotifiedAt;
-      const alreadyTold = notifiedAt !== null;
-      const seenSince = alreadyTold && readAt !== null && readAt > notifiedAt;
-      const stale = alreadyTold && Date.now() - notifiedAt.getTime() > RENOTIFY_AFTER_MS;
-      if (alreadyTold && !seenSince && !stale) return;
-
       const sender = await this.prisma.user.findUnique({ where: { id: viewer.id }, select: { firstName: true, lastName: true } });
       const senderName = sender ? `${sender.firstName} ${sender.lastName}` : "Un contact";
       const frontend = process.env.FRONTEND_URL ?? "http://localhost:3100";
@@ -100,7 +91,7 @@ export class MessagesService {
       }
       if (!recipients.length) return;
 
-      // Mark first: a second message arriving while we send must not trigger a second email.
+      // Every message triggers an e-mail (no throttling); the timestamp is kept for information.
       await this.prisma.conversation.update({
         where: { id: conversationId },
         data: to === "CANDIDATE" ? { candidateNotifiedAt: new Date() } : { recruiterNotifiedAt: new Date() },
@@ -122,6 +113,20 @@ export class MessagesService {
     } catch (error) {
       this.logger.warn(`Notification skipped: ${error instanceof Error ? error.message : error}`);
     }
+  }
+
+  /** Automatic message from a recruiter's account (e.g. hiring outcome). Same thread and e-mail notification as a typed message. */
+  async postFromRecruiter(userId: string, companyId: string, candidateId: string, jobId: string, body: string) {
+    const now = new Date();
+    const conversation = await this.prisma.conversation.upsert({
+      where: { companyId_candidateId: { companyId, candidateId } },
+      create: { companyId, candidateId, jobId, recruiterReadAt: now },
+      update: { jobId, recruiterReadAt: now },
+      select: { id: true },
+    });
+    await this.prisma.message.create({ data: { conversationId: conversation.id, senderId: userId, body } });
+    await this.prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() }, select: { id: true } });
+    await this.notify(conversation.id, { id: userId, role: "RECRUITER" }, "RECRUITER", body);
   }
 
   private side(viewer: Viewer): { side: Side; companyId?: string; candidateId?: string } {

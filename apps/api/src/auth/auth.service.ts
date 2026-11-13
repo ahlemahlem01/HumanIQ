@@ -29,6 +29,10 @@ export class AuthService {
       throw new ConflictException("Le nom de l'entreprise est requis pour un recruteur.");
     }
 
+    if (dto.role === Role.RECRUITER && !allowsFreeMailRecruiters() && isFreeMailDomain(dto.email)) {
+      throw new BadRequestException("Utilisez votre adresse e-mail professionnelle (les adresses gratuites type Gmail ou Hotmail ne sont pas acceptées pour un compte recruteur).");
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.user.create({
       data: {
@@ -259,6 +263,21 @@ export class AuthService {
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+const FREE_MAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "hotmail.com", "hotmail.fr", "outlook.com", "outlook.fr", "live.com", "live.fr", "msn.com",
+  "yahoo.com", "yahoo.fr", "ymail.com", "icloud.com", "me.com", "aol.com", "gmx.com", "gmx.fr", "mail.com", "proton.me",
+  "protonmail.com", "orange.fr", "free.fr", "laposte.net", "wanadoo.fr", "sfr.fr", "yandex.com", "zoho.com",
+]);
+
+function isFreeMailDomain(email: string) {
+  return FREE_MAIL_DOMAINS.has(email.toLowerCase().split("@")[1] ?? "");
+}
+
+/** Development escape hatch (ALLOW_FREE_EMAIL_RECRUITERS=true) so tests can use personal mailboxes. Never set in production. */
+function allowsFreeMailRecruiters() {
+  return process.env.ALLOW_FREE_EMAIL_RECRUITERS === "true" && process.env.NODE_ENV !== "production";
 }
 
 function slugify(value: string) {

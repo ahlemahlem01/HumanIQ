@@ -36,6 +36,13 @@ export async function api<T>(
   return res.json() as Promise<T>;
 }
 
+/** Fetches a protected file (needs the bearer token, so a plain link would not work). */
+export async function apiBlob(path: string, token: string | null | undefined): Promise<Blob> {
+  const res = await fetch(`${API}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status === 404 ? "Aucun fichier de CV déposé." : "Fichier indisponible.", res.status);
+  return res.blob();
+}
+
 /** Multipart upload — the browser must set its own boundary, so no Content-Type here. */
 export async function upload<T>(
   path: string,

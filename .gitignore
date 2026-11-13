@@ -8,5 +8,6 @@ coverage
 .env.local
 .env.*.local
 uploads
+private
 .DS_Store
 Thumbs.db

@@ -321,12 +321,28 @@ export default function RecruiterOfferPage() {
                 {message && !editing ? <p className="mt-3 text-sm font-medium text-forest">{message}</p> : null}
               </section>
 
-              <section className="rounded-2xl border border-line bg-cream p-5 text-sm">
+              <section
+                className={`rounded-2xl border border-line p-5 text-sm ${job.status === "PUBLISHED" ? "bg-cream" : "bg-paper opacity-60"}`}
+                aria-disabled={job.status !== "PUBLISHED"}
+              >
                 <h2 className="text-base font-semibold">Aperçu candidat</h2>
-                <p className="mt-2 leading-6 text-sage">Voyez l&apos;offre telle qu&apos;un candidat la découvre.</p>
-                <Link href={`/offres/${job.id}`} className="mt-3 inline-block font-semibold text-forest hover:underline">
-                  Voir l&apos;offre publique
-                </Link>
+                {job.status === "PUBLISHED" ? (
+                  <>
+                    <p className="mt-2 leading-6 text-sage">Voyez l&apos;offre telle qu&apos;un candidat la découvre.</p>
+                    <Link href={`/offres/${job.id}`} className="mt-3 inline-block font-semibold text-forest hover:underline">
+                      Voir l&apos;offre publique
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 leading-6 text-sage">
+                      {job.status === "PAUSED"
+                        ? "L'offre est en pause : les candidats ne peuvent plus la voir."
+                        : "L'offre n'est pas publiée : les candidats ne peuvent pas la voir."}
+                    </p>
+                    <span className="mt-3 inline-block cursor-not-allowed font-semibold text-sage">Voir l&apos;offre publique</span>
+                  </>
+                )}
               </section>
             </aside>
           </div>

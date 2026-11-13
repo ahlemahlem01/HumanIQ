@@ -88,6 +88,7 @@ export function MessagesView({ role }: { role: Role }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [mobileThread, setMobileThread] = useState(false);
+  const [search, setSearch] = useState("");
   const [emailPref, setEmailPref] = useState<boolean | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastCount = useRef(0);
@@ -206,6 +207,10 @@ export function MessagesView({ role }: { role: Role }) {
     }
   }
 
+  const needle = search.trim().toLowerCase();
+  const shown = (conversations ?? []).filter(
+    (c) => !needle || `${c.counterpart.name} ${c.counterpart.subtitle} ${c.job?.title ?? ""} ${c.lastMessage?.body ?? ""}`.toLowerCase().includes(needle),
+  );
   const showingThread = Boolean(activeId || prospect);
   const title = thread?.counterpart.name ?? prospect?.name ?? "";
   const subtitle = thread?.counterpart.subtitle ?? prospect?.headline ?? "";
@@ -215,12 +220,12 @@ export function MessagesView({ role }: { role: Role }) {
   return (
     <AppShell role={role} plain>
       <div className="mx-auto max-w-[1180px]">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight">Messages</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
           {emailPref !== null ? (
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-3 rounded-full border border-line bg-white py-1.5 pl-4 pr-2 text-sm">
               <span id="email-pref-label" className="text-sage">
-                M&apos;avertir par e-mail des nouveaux messages
+                Notifications par e-mail
               </span>
               <button
                 type="button"
@@ -241,14 +246,23 @@ export function MessagesView({ role }: { role: Role }) {
             </div>
           ) : null}
         </div>
-        <div className="mt-5 grid h-[calc(100vh-11rem)] min-h-[460px] overflow-hidden rounded-2xl border border-line bg-white lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="mt-4 grid h-[calc(100vh-9rem)] min-h-[460px] overflow-hidden rounded-3xl border border-line bg-white shadow-sm lg:grid-cols-[330px_minmax(0,1fr)]">
           {/* Conversations */}
           <aside className={`min-h-0 flex-col border-line lg:flex lg:border-r ${mobileThread && showingThread ? "hidden" : "flex"}`}>
-            <div className="border-b border-line px-4 py-3 text-sm font-semibold">
-              Conversations
-              {conversations && conversations.length > 0 ? <span className="ml-2 text-sage">{conversations.length}</span> : null}
+            <div className="px-4 pb-2 pt-4">
+              <div className="mb-3 flex items-baseline justify-between">
+                <span className="text-base font-semibold">Conversations</span>
+                {conversations && conversations.length > 0 ? <span className="text-xs text-sage">{conversations.length}</span> : null}
+              </div>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Rechercher"
+                aria-label="Rechercher une conversation"
+                className="w-full rounded-full bg-paper px-4 py-2 text-sm outline-none placeholder:text-sage/70 focus:bg-white focus:ring-2 focus:ring-forest/20"
+              />
             </div>
-            <ul className="min-h-0 flex-1 overflow-y-auto">
+            <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
               {conversations === null ? <li className="p-5 text-sm text-sage">Chargement…</li> : null}
               {conversations && conversations.length === 0 ? (
                 <li className="p-6 text-sm leading-6 text-sage">
@@ -257,7 +271,10 @@ export function MessagesView({ role }: { role: Role }) {
                     : "Aucun message pour l'instant. Les recruteurs qui vous contactent apparaîtront ici."}
                 </li>
               ) : null}
-              {conversations?.map((conversation) => {
+              {conversations && conversations.length > 0 && shown.length === 0 ? (
+                <li className="p-5 text-center text-sm text-sage">Aucune conversation trouvée.</li>
+              ) : null}
+              {shown.map((conversation) => {
                 const active = conversation.id === activeId;
                 return (
                   <li key={conversation.id}>
@@ -269,11 +286,15 @@ export function MessagesView({ role }: { role: Role }) {
                         setMobileThread(true);
                         setError("");
                       }}
-                      className={`flex w-full gap-3 border-b border-line px-4 py-3 text-left transition ${
+                      className={`flex w-full gap-3 rounded-2xl px-3 py-3 text-left transition ${
                         active ? "bg-tint" : "hover:bg-paper"
                       }`}
                     >
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-forest text-sm font-semibold text-white">
+                      <span
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                          conversation.unread ? "bg-forest text-white" : "bg-tint text-forest"
+                        }`}
+                      >
                         {initials(conversation.counterpart.name)}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -286,8 +307,7 @@ export function MessagesView({ role }: { role: Role }) {
                           ) : null}
                         </span>
                         <span className="block truncate text-xs text-sage">
-                          {conversation.job ? `${conversation.job.title} · ` : ""}
-                          {conversation.counterpart.subtitle}
+                          {conversation.job ? conversation.job.title : conversation.counterpart.subtitle}
                         </span>
                         <span className="mt-0.5 flex items-center gap-2">
                           <span className={`min-w-0 flex-1 truncate text-sm ${conversation.unread ? "font-semibold text-ink" : "text-sage"}`}>
@@ -321,7 +341,7 @@ export function MessagesView({ role }: { role: Role }) {
               </div>
             ) : (
               <>
-                <header className="flex items-center gap-3 border-b border-line px-5 py-3">
+                <header className="flex items-center gap-3 border-b border-line bg-white px-5 py-3.5">
                   <button
                     type="button"
                     onClick={() => setMobileThread(false)}
@@ -330,16 +350,18 @@ export function MessagesView({ role }: { role: Role }) {
                   >
                     ←
                   </button>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-forest text-sm font-semibold text-white">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-tint text-sm font-semibold text-forest">
                     {initials(title)}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{title}</p>
-                    <p className="truncate text-xs text-sage">
-                      {thread?.job ? `À propos de ${thread.job.title} · ` : ""}
-                      {subtitle}
-                    </p>
+                    <p className="truncate text-xs text-sage">{subtitle}</p>
                   </div>
+                  {thread?.job ? (
+                    <span className="hidden max-w-[220px] shrink-0 truncate rounded-full bg-tint px-3 py-1 text-xs font-semibold text-forest sm:inline">
+                      {thread.job.title}
+                    </span>
+                  ) : null}
                   {role === "RECRUITER" && (thread?.counterpart.candidateId || prospect?.id) ? (
                     <Link
                       href={`/recruteur/candidats/${thread?.counterpart.candidateId ?? prospect?.id}`}
@@ -350,7 +372,7 @@ export function MessagesView({ role }: { role: Role }) {
                   ) : null}
                 </header>
 
-                <div className="min-h-0 flex-1 overflow-y-auto bg-paper px-5 py-4">
+                <div className="min-h-0 flex-1 overflow-y-auto bg-paper/70 px-6 py-5">
                   {prospect && !activeId ? (
                     <div className="mx-auto max-w-md rounded-2xl border border-line bg-white p-5 text-center">
                       <p className="font-semibold">Nouvelle conversation avec {prospect.name}</p>
@@ -368,14 +390,16 @@ export function MessagesView({ role }: { role: Role }) {
                     return (
                       <div key={message.id}>
                         {showDay ? (
-                          <p className="my-3 text-center text-xs font-medium capitalize text-sage">{day}</p>
+                          <p className="my-4 flex items-center gap-3 text-xs font-medium capitalize text-sage before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line">
+                            {day}
+                          </p>
                         ) : null}
-                        <div className={`mb-2 flex ${message.mine ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[78%] ${message.mine ? "items-end" : "items-start"} flex flex-col`}>
+                        <div className={`mb-3 flex ${message.mine ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[72%] ${message.mine ? "items-end" : "items-start"} flex flex-col`}>
                             {!message.mine ? <span className="mb-0.5 px-1 text-xs text-sage">{message.sender.name}</span> : null}
                             <p
-                              className={`whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-6 ${
-                                message.mine ? "rounded-br-md bg-forest text-white" : "rounded-bl-md border border-line bg-white"
+                              className={`whitespace-pre-wrap break-words rounded-[20px] px-4 py-2.5 text-sm leading-6 ${
+                                message.mine ? "rounded-br-md bg-forest text-white" : "rounded-bl-md bg-white shadow-sm ring-1 ring-line"
                               }`}
                             >
                               {message.body}
@@ -400,7 +424,7 @@ export function MessagesView({ role }: { role: Role }) {
                   className="border-t border-line bg-white p-3"
                 >
                   {error ? <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-                  <div className="flex items-end gap-2">
+                  <div className="flex items-end gap-2 rounded-3xl border border-line bg-paper py-1.5 pl-4 pr-1.5 focus-within:border-forest focus-within:bg-white focus-within:ring-2 focus-within:ring-forest/15">
                     <textarea
                       value={draft}
                       onChange={(event) => setDraft(event.target.value.slice(0, MAX))}
@@ -410,19 +434,21 @@ export function MessagesView({ role }: { role: Role }) {
                           void send();
                         }
                       }}
-                      rows={2}
+                      rows={1}
                       disabled={Boolean(prospect && !prospect.canContact && !activeId)}
-                      placeholder="Écrire un message…  (Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne)"
+                      placeholder="Écrire un message…"
                       aria-label="Votre message"
-                      className="min-h-[52px] flex-1 resize-none rounded-2xl border border-line bg-paper px-4 py-3 text-sm outline-none focus:border-forest focus:bg-white focus:ring-2 focus:ring-forest/20 disabled:opacity-50"
+                      className="max-h-32 min-h-[40px] flex-1 resize-none bg-transparent py-2.5 text-sm outline-none placeholder:text-sage/70 disabled:opacity-50"
                     />
                     <button
                       disabled={sending || !draft.trim() || Boolean(prospect && !prospect.canContact && !activeId)}
-                      className="h-[52px] shrink-0 rounded-full bg-forest px-6 text-sm font-semibold text-white transition active:scale-95 disabled:opacity-50"
+                      aria-label="Envoyer"
+                      className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-forest px-5 text-sm font-semibold text-white transition hover:bg-forest-dark active:scale-95 disabled:bg-line disabled:text-sage"
                     >
                       {sending ? "Envoi…" : "Envoyer"}
                     </button>
                   </div>
+                  <p className="mt-1.5 px-2 text-[11px] text-sage/80">Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne</p>
                   {draft.length > MAX * 0.9 ? <p className="mt-1 text-right text-xs text-sage">{draft.length} / {MAX}</p> : null}
                 </form>
               </>

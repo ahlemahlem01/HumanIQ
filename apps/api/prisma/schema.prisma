@@ -104,6 +104,8 @@ model Company {
   plan                 Plan               @default(STARTER)
   subscriptionStatus   String             @default("trialing")
   seats                Int                @default(3)
+  /// Set by an admin once the company is confirmed to be real. Until then its recruiters cannot see candidate data.
+  verifiedAt           DateTime?
   recruiters           RecruiterProfile[]
   jobs                 Job[]
   conversations        Conversation[]

@@ -12,6 +12,8 @@
     "admin:create": "tsx prisma/create-admin.ts",
     "migrate:deploy": "prisma migrate deploy",
     "seed:demo": "tsx prisma/seed-demo.ts",
+    "seed:offer": "tsx prisma/seed-offer-test.ts",
+    "seed:company-b": "tsx prisma/seed-company-b.ts",
     "seed:demo:remove": "tsx prisma/seed-demo.ts --remove",
     "test": "node --import tsx --test \"test/*.test.ts\""
   },

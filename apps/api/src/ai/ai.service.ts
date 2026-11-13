@@ -6,6 +6,7 @@ import { LLM_PROVIDER, LlmProvider } from "./providers/types";
 import { BULLET_TIPS, SUMMARY_TIPS, VERB_STARTERS, analyzeBullets, localSummaries } from "./cv-assist";
 import { auditCvDocument } from "./cv-ats";
 import { parseCvProfile } from "./cv-profile";
+import { deleteCvFile, saveCvFile } from "../candidates/cv-storage";
 import {
   blendScores,
   extractSkillsFromText,
@@ -44,10 +45,13 @@ export class AiService {
       mimeType: parsed.mimeType,
       pageCount: parsed.pageCount,
     });
+    if (file.buffer?.length) await saveCvFile(candidateId, file.buffer);
     return { ...result, document: this.documentSummary(parsed) };
   }
 
   async parseCvText(candidateId: string, cvText: string, fileName?: string) {
+    // The text replaces the CV: an older original file would no longer match it.
+    await deleteCvFile(candidateId).catch(() => undefined);
     return this.applyCv(candidateId, cvText, {
       fileName: fileName ?? "cv-colle.txt",
       mimeType: "text/plain",
@@ -171,7 +175,7 @@ export class AiService {
     if (!profile) throw new NotFoundException("Profil candidat introuvable.");
 
     const jobs = await this.prisma.job.findMany({
-      where: { status: "PUBLISHED" },
+      where: { status: "PUBLISHED", company: { verifiedAt: { not: null } } },
       include: { company: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
       take: 40,
@@ -443,7 +447,7 @@ export class AiService {
 
     const [jobs, profile] = await Promise.all([
       this.prisma.job.findMany({
-        where: { id: { in: hits.map((hit) => hit.id) } },
+        where: { id: { in: hits.map((hit) => hit.id) }, status: "PUBLISHED", company: { verifiedAt: { not: null } } },
         include: { company: { select: { name: true } } },
       }),
       this.prisma.candidateProfile.findUnique({ where: { id: candidateId } }),

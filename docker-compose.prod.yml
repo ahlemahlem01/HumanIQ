@@ -67,6 +67,7 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
     volumes:
       - uploads:/app/uploads
+      - private:/app/private
 
   web:
     build:
@@ -99,5 +100,6 @@ volumes:
   postgres_data:
   meili_data:
   uploads:
+  private:
   caddy_data:
   caddy_config:

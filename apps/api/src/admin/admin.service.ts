@@ -1,3 +1,4 @@
+import { deleteCvFile } from "../candidates/cv-storage";
 import { Inject, Injectable } from "@nestjs/common";
 import { JobStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -51,6 +52,7 @@ export class AdminService {
       include: { candidate: true },
     });
     if (!user) return null;
+    if (user.candidate) await deleteCvFile(user.candidate.id).catch(() => undefined);
     return this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -71,5 +73,39 @@ export class AdminService {
           : undefined,
       },
     });
+  }
+
+  async companies() {
+    const rows = await this.prisma.company.findMany({
+      orderBy: [{ verifiedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
+      include: {
+        recruiters: { include: { user: { select: { firstName: true, lastName: true, email: true } } } },
+        _count: { select: { jobs: true } },
+      },
+    });
+    return rows.map((company) => ({
+      id: company.id,
+      name: company.name,
+      website: company.website,
+      createdAt: company.createdAt,
+      verifiedAt: company.verifiedAt,
+      jobs: company._count.jobs,
+      members: company.recruiters.map((member) => ({
+        name: `${member.user.firstName} ${member.user.lastName}`,
+        email: member.user.email,
+      })),
+    }));
+  }
+
+  async setCompanyVerified(companyId: string, verified: boolean) {
+    const company = await this.prisma.company.update({
+      where: { id: companyId },
+      data: { verifiedAt: verified ? new Date() : null },
+      select: { id: true, name: true, verifiedAt: true },
+    });
+    await this.prisma.auditLog.create({
+      data: { action: verified ? "COMPANY_VERIFIED" : "COMPANY_UNVERIFIED", entity: "Company", entityId: companyId },
+    });
+    return company;
   }
 }

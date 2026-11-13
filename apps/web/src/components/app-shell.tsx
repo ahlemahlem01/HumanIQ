@@ -34,6 +34,7 @@ const PRIMARY: Record<Role, NavItem[]> = {
   ],
   ADMIN: [
     { href: "/admin", label: "Stats", icon: "chart" },
+    { href: "/admin/entreprises", label: "Entreprises", icon: "users" },
     { href: "/admin/annonces", label: "Annonces", icon: "brief" },
     { href: "/admin/conformite", label: "RGPD", icon: "shield" },
   ],
@@ -129,7 +130,7 @@ export function AppShell({
     if (role === "CANDIDATE" && pathname !== "/candidat/emplois") {
       router.push(`/candidat/emplois?q=${encodeURIComponent(q)}`);
     }
-    if (role === "RECRUITER" && pathname !== "/recruteur/sourcing" && !pathname.startsWith("/recruteur/cvtheque")) {
+    if (role === "RECRUITER" && pathname !== "/recruteur/sourcing" && pathname !== "/recruteur/imports" && !pathname.startsWith("/recruteur/cvtheque")) {
       router.push(`/recruteur/cvtheque?q=${encodeURIComponent(q)}`);
     }
   }
@@ -298,6 +299,8 @@ type IconName = "home" | "user" | "file" | "scan" | "pen" | "chat" | "check" | "
 
 function isActive(pathname: string, href: string) {
   if (href === "/candidat" || href === "/recruteur" || href === "/admin" || href === "/offres") return pathname === href;
+  // "Mes imports" is the second tab of the Vivier area.
+  if (href === "/recruteur/sourcing" && pathname === "/recruteur/imports") return true;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

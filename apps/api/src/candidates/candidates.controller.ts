@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, MinLength, IsObject } from "class-validator";
 import { Role } from "@prisma/client";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { VerifiedCompanyGuard } from "../auth/verified-company.guard";
 import { CandidatesService } from "./candidates.service";
 
 class UpdateProfileDto {
@@ -243,18 +244,33 @@ export class CandidatesController {
   }
 
   @Roles(Role.RECRUITER, Role.ADMIN)
+  @UseGuards(VerifiedCompanyGuard)
   @Get("cvtheque")
   library() {
     return this.candidates.library();
   }
 
   @Roles(Role.RECRUITER, Role.ADMIN)
+  @UseGuards(VerifiedCompanyGuard)
+  @Get("cvtheque/:id/file")
+  async libraryFile(@Req() req: { user: { id: string } }, @Param("id") id: string, @Query("download") download?: string) {
+    const file = await this.candidates.cvFile(id, req.user.id);
+    const name = file.fileName.replace(/[^\w.\- ]+/g, "_");
+    return new StreamableFile(file.buffer, {
+      type: file.mimeType,
+      disposition: `${download ? "attachment" : "inline"}; filename="${name}"`,
+    });
+  }
+
+  @Roles(Role.RECRUITER, Role.ADMIN)
+  @UseGuards(VerifiedCompanyGuard)
   @Get("cvtheque/:id")
   libraryOne(@Req() req: { user: { id: string } }, @Param("id") id: string) {
     return this.candidates.libraryOne(id, req.user.id);
   }
 
   @Roles(Role.RECRUITER, Role.ADMIN)
+  @UseGuards(VerifiedCompanyGuard)
   @Get("talents/search")
   searchTalents(
     @Query("q") q?: string,
@@ -284,12 +300,14 @@ export class CandidatesController {
   }
 
   @Roles(Role.RECRUITER, Role.ADMIN)
+  @UseGuards(VerifiedCompanyGuard)
   @Get("reverse-pool")
   pool() {
     return this.candidates.reversePool();
   }
 
   @Roles(Role.RECRUITER, Role.ADMIN)
+  @UseGuards(VerifiedCompanyGuard)
   @Get("pool/:id")
   open(@Req() req: { user: { id: string } }, @Param("id") id: string) {
     return this.candidates.openForRecruiter(id, req.user.id);

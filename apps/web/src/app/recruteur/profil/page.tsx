@@ -203,7 +203,7 @@ export default function RecruiterProfilePage() {
                 >
                   {editing ? "Fermer" : "Modifier le profil"}
                 </button>
-                <Link href="/recruteur/offres" className="rounded-full border border-forest px-5 py-2 text-sm font-semibold text-forest hover:bg-tint">
+                <Link href="/recruteur/offres/nouvelle" className="rounded-full border border-forest px-5 py-2 text-sm font-semibold text-forest hover:bg-tint">
                   Publier une offre
                 </Link>
                 <Link href="/recruteur/sourcing" className="rounded-full border border-line px-5 py-2 text-sm font-semibold text-ink hover:bg-paper">
@@ -264,7 +264,7 @@ export default function RecruiterProfilePage() {
           <section className="rounded-2xl border border-line bg-cream px-6 py-5">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h2 className="text-xl font-semibold">Offres portées</h2>
-              <Link href="/recruteur/offres" className="text-sm font-semibold text-forest hover:underline">
+              <Link href="/recruteur/offres/nouvelle" className="text-sm font-semibold text-forest hover:underline">
                 Publier
               </Link>
             </div>

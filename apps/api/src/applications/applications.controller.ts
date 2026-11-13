@@ -108,6 +108,12 @@ export class ApplicationsController {
   }
 
   @Roles(Role.RECRUITER)
+  @Post(":id/hire")
+  hire(@Req() req: { user: { id: string; recruiter: { id: string } } }, @Param("id") id: string) {
+    return this.applications.hire(id, req.user.recruiter.id, req.user.id);
+  }
+
+  @Roles(Role.RECRUITER)
   @Post(":id/assessments")
   assess(
     @Req() req: { user: { recruiter: { id: string } } },
