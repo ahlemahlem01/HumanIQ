@@ -87,6 +87,8 @@ export class AdminService {
       id: company.id,
       name: company.name,
       website: company.website,
+      logoUrl: company.logoUrl,
+      description: company.description,
       createdAt: company.createdAt,
       verifiedAt: company.verifiedAt,
       jobs: company._count.jobs,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { CompanyLogo } from "@/components/company-logo";
 import { api, mediaUrl, upload } from "@/lib/api";
 
 type Job = {
@@ -66,8 +67,15 @@ export default function RecruiterProfilePage() {
   const [companySaving, setCompanySaving] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
 
+  function confirmReverify(what: string) {
+    return window.confirm(
+      `Changer ${what} de l'entreprise la remet « en attente de validation » : l'accès aux données des candidats et la visibilité de vos offres seront suspendus jusqu'à une nouvelle validation par l'équipe HumanIQ. Continuer ?`,
+    );
+  }
+
   async function uploadLogo(file: File) {
     if (!token) return;
+    if (profile?.company.verifiedAt && !confirmReverify("le logo")) return;
     setLogoBusy(true);
     setCompanyError("");
     try {
@@ -119,12 +127,9 @@ export default function RecruiterProfilePage() {
     if (!token || !profile) return;
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
-    if (name !== profile.company.name && profile.company.verifiedAt) {
-      const ok = window.confirm(
-        "Changer le nom de l'entreprise la remet « en attente de validation » : l'accès aux données des candidats et la visibilité de vos offres seront suspendus jusqu'à une nouvelle validation. Continuer ?",
-      );
-      if (!ok) return;
-    }
+    const website = String(form.get("website") ?? "").trim();
+    const identityChanged = name !== profile.company.name || website !== (profile.company.website ?? "").trim();
+    if (identityChanged && profile.company.verifiedAt && !confirmReverify("le nom ou le site web")) return;
     setCompanySaving(true);
     setCompanyError("");
     try {
@@ -250,9 +255,7 @@ export default function RecruiterProfilePage() {
                   </p>
                 </div>
                 <p className="flex items-center gap-2 text-sm font-medium">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-md border border-line bg-paper text-xs font-semibold">
-                    {initialsOf(profile.company.name)}
-                  </span>
+                  <CompanyLogo company={profile.company} className="h-9 w-9 rounded-md text-xs" />
                   {profile.company.name}
                 </p>
               </div>
@@ -336,9 +339,7 @@ export default function RecruiterProfilePage() {
               <ul className="divide-y divide-line">
                 {profile.jobs.map((job) => (
                   <li key={job.id} className="flex gap-3 py-4 first:pt-2 last:pb-0">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-line bg-paper text-sm font-semibold">
-                      {initialsOf(profile.company.name)}
-                    </span>
+                    <CompanyLogo company={profile.company} className="h-12 w-12 rounded-md text-sm" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <Link href={`/recruteur/offres/${job.id}`} className="font-semibold hover:text-forest hover:underline">
@@ -483,7 +484,7 @@ export default function RecruiterProfilePage() {
                   />
                 </label>
                 {profile.company.verifiedAt ? (
-                  <p className="text-xs leading-5 text-sage">Changer le nom exige une nouvelle validation de l&apos;entreprise.</p>
+                  <p className="text-xs leading-5 text-sage">Changer le nom, le site web ou le logo exige une nouvelle validation de l&apos;entreprise.</p>
                 ) : null}
                 {companyError ? <p className="text-red-700">{companyError}</p> : null}
                 <div className="flex gap-2">

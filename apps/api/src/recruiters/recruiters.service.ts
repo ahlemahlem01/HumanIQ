@@ -127,7 +127,7 @@ export class RecruitersService {
    */
   async updateCompany(recruiterId: string, data: { name?: string; description?: string; website?: string }) {
     const companyId = await companyIdOf(this.prisma, recruiterId);
-    const current = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { name: true } });
+    const current = await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { name: true, website: true, verifiedAt: true } });
 
     let website: string | null | undefined = clean(data.website);
     if (website) {
@@ -144,6 +144,8 @@ export class RecruitersService {
     const name = data.name === undefined ? undefined : data.name.trim();
     if (name !== undefined && name.length < 2) throw new BadRequestException("Le nom de l'entreprise est trop court.");
     const renamed = name !== undefined && name !== current.name;
+    const rewebbed = website !== undefined && (website ?? null) !== (current.website ?? null);
+    const identityChanged = renamed || rewebbed;
 
     await this.prisma.company.update({
       where: { id: companyId },
@@ -151,9 +153,10 @@ export class RecruitersService {
         ...(name !== undefined ? { name } : {}),
         description: clean(data.description),
         website,
-        ...(renamed ? { verifiedAt: null } : {}),
+        ...(identityChanged ? { verifiedAt: null } : {}),
       },
     });
+    if (identityChanged) await this.recordIdentityChange(recruiterId, companyId, renamed ? "name" : "website", Boolean(current.verifiedAt));
     return this.getMe(recruiterId);
   }
 
@@ -175,7 +178,9 @@ export class RecruitersService {
     // A new name each time, so browsers do not keep showing the previous logo.
     const name = `${companyId}-${Date.now().toString(36)}${ext}`;
     await writeFile(join(LOGO_DIR, name), file.buffer);
-    await this.prisma.company.update({ where: { id: companyId }, data: { logoUrl: `/uploads/logos/${name}` } });
+    const wasVerified = Boolean((await this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { verifiedAt: true } })).verifiedAt);
+    await this.prisma.company.update({ where: { id: companyId }, data: { logoUrl: `/uploads/logos/${name}`, verifiedAt: null } });
+    await this.recordIdentityChange(recruiterId, companyId, "logo", wasVerified);
     await this.dropLogoFile(current.logoUrl);
     return this.getMe(recruiterId);
   }
@@ -186,6 +191,20 @@ export class RecruitersService {
     await this.prisma.company.update({ where: { id: companyId }, data: { logoUrl: null } });
     await this.dropLogoFile(current.logoUrl);
     return this.getMe(recruiterId);
+  }
+
+  /** Name, website and logo are what makes a company look legitimate: changing them requires a new validation. */
+  private async recordIdentityChange(recruiterId: string, companyId: string, field: "name" | "website" | "logo", wasVerified: boolean) {
+    const recruiter = await this.prisma.recruiterProfile.findUnique({ where: { id: recruiterId }, select: { userId: true } });
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: recruiter?.userId,
+        action: "COMPANY_IDENTITY_CHANGED",
+        entity: "Company",
+        entityId: companyId,
+        metadata: { field, wasVerified },
+      },
+    });
   }
 
   private async dropLogoFile(logoUrl: string | null) {

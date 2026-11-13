@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { CompanyLogo } from "@/components/company-logo";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -9,6 +10,8 @@ type Company = {
   id: string;
   name: string;
   website: string | null;
+  logoUrl: string | null;
+  description: string | null;
   createdAt: string;
   verifiedAt: string | null;
   jobs: number;
@@ -53,7 +56,8 @@ export default function CompaniesPage() {
         {(companies ?? []).map((company) => (
           <li key={company.id} className="rounded-2xl border border-line bg-cream px-5 py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
+              <CompanyLogo company={company} className="h-12 w-12 rounded-lg text-sm" />
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold">
                   {company.name}
                   <span
@@ -68,6 +72,7 @@ export default function CompaniesPage() {
                   Inscrite le {new Date(company.createdAt).toLocaleDateString("fr-FR")} · {company.jobs} offre{company.jobs > 1 ? "s" : ""}
                   {company.website ? ` · ${company.website}` : ""}
                 </p>
+                {company.description ? <p className="mt-2 line-clamp-2 text-sm text-sage">{company.description}</p> : null}
                 <ul className="mt-2 space-y-0.5 text-sm">
                   {company.members.map((member) => (
                     <li key={member.email}>
