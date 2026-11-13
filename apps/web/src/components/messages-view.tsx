@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
-import { api } from "@/lib/api";
+import { api, mediaUrl } from "@/lib/api";
 import { useAuth, type Role } from "@/lib/auth";
 
 type Conversation = {
   id: string;
-  counterpart: { name: string; subtitle: string; candidateId: string | null };
+  counterpart: { name: string; subtitle: string; candidateId: string | null; logoUrl?: string | null };
   job: { id: string; title: string } | null;
   unread: number;
   updatedAt: string;
@@ -26,7 +26,7 @@ type Message = {
 
 type Thread = {
   id: string;
-  counterpart: { name: string; subtitle: string; candidateId: string | null; location: string | null };
+  counterpart: { name: string; subtitle: string; candidateId: string | null; location: string | null; logoUrl?: string | null };
   job: { id: string; title: string } | null;
   messages: Message[];
 };
@@ -291,11 +291,15 @@ export function MessagesView({ role }: { role: Role }) {
                       }`}
                     >
                       <span
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-                          conversation.unread ? "bg-forest text-white" : "bg-tint text-forest"
-                        }`}
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden text-sm font-semibold ${
+                          conversation.counterpart.logoUrl ? "rounded-xl border border-line bg-white" : "rounded-full"
+                        } ${conversation.unread && !conversation.counterpart.logoUrl ? "bg-forest text-white" : "bg-tint text-forest"}`}
                       >
-                        {initials(conversation.counterpart.name)}
+                        {conversation.counterpart.logoUrl ? (
+                          <img src={mediaUrl(conversation.counterpart.logoUrl)} alt="" className="h-full w-full object-contain" />
+                        ) : (
+                          initials(conversation.counterpart.name)
+                        )}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
@@ -350,8 +354,16 @@ export function MessagesView({ role }: { role: Role }) {
                   >
                     ←
                   </button>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-tint text-sm font-semibold text-forest">
-                    {initials(title)}
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden bg-tint text-sm font-semibold text-forest ${
+                      thread?.counterpart.logoUrl ? "rounded-xl border border-line bg-white" : "rounded-full"
+                    }`}
+                  >
+                    {thread?.counterpart.logoUrl ? (
+                      <img src={mediaUrl(thread.counterpart.logoUrl)} alt="" className="h-full w-full object-contain" />
+                    ) : (
+                      initials(title)
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{title}</p>

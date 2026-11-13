@@ -223,7 +223,7 @@ export class MessagesService {
       orderBy: { updatedAt: "desc" },
       take: 100,
       include: {
-        company: { select: { name: true } },
+        company: { select: { name: true, logoUrl: true } },
         job: { select: { id: true, title: true } },
         candidate: {
           select: {
@@ -269,7 +269,7 @@ export class MessagesService {
                   candidateId: row.candidateId,
                   avatarImage: row.candidate.anonymousVisible && !appliedIds.has(row.candidateId) ? null : row.candidate.avatarImage,
                 }
-              : { name: row.company.name, subtitle: "Équipe de recrutement", candidateId: null, avatarImage: null },
+              : { name: row.company.name, subtitle: "Équipe de recrutement", candidateId: null, avatarImage: null, logoUrl: row.company.logoUrl },
           job: row.job,
           unread,
           updatedAt: row.updatedAt,
@@ -317,7 +317,7 @@ export class MessagesService {
     const row = await this.prisma.conversation.findUniqueOrThrow({
       where: { id },
       include: {
-        company: { select: { name: true } },
+        company: { select: { name: true, logoUrl: true } },
         job: { select: { id: true, title: true } },
         candidate: {
           select: {
@@ -359,7 +359,7 @@ export class MessagesService {
               candidateId: row.candidateId,
               location: row.candidate.location,
             }
-          : { name: row.company.name, subtitle: "Équipe de recrutement", candidateId: null, location: null },
+          : { name: row.company.name, subtitle: "Équipe de recrutement", candidateId: null, location: null, logoUrl: row.company.logoUrl },
       job: row.job,
       messages: row.messages.map((message) => ({
         id: message.id,

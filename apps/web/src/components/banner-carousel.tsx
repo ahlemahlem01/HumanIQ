@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { mediaUrl } from "@/lib/api";
 import { useEffect, useState } from "react";
 
 export type BannerSlide = {
@@ -10,6 +11,8 @@ export type BannerSlide = {
   body: string;
   /** SVG path (24x24 viewBox, stroke icon) shown in the tile on the right. */
   icon: string;
+  /** Company logo shown in the tile instead of the icon (optional). */
+  logoUrl?: string | null;
   primary?: { label: string; href: string };
   secondary?: { label: string; href: string };
 };
@@ -103,9 +106,15 @@ export function BannerCarousel({
                 }`}
                 aria-hidden
               >
-                <svg viewBox="0 0 24 24" className={compact ? "h-9 w-9" : "h-14 w-14"} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d={slide.icon} />
-                </svg>
+                {slide.logoUrl ? (
+                  <span className={`flex items-center justify-center overflow-hidden bg-white ${compact ? "h-14 w-14 rounded-xl" : "h-24 w-24 rounded-2xl"}`}>
+                    <img src={mediaUrl(slide.logoUrl)} alt="" className="h-full w-full object-contain" />
+                  </span>
+                ) : (
+                  <svg viewBox="0 0 24 24" className={compact ? "h-9 w-9" : "h-14 w-14"} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={slide.icon} />
+                  </svg>
+                )}
               </div>
             </div>
           );

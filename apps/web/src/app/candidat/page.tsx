@@ -32,7 +32,7 @@ type JobLite = {
   currency?: string;
   requiredSkills?: string[];
   createdAt?: string;
-  company: { name: string };
+  company: { name: string; logoUrl?: string | null };
 };
 
 type Recommendation = { score?: number; semanticScore: number; job: { id: string } };
@@ -139,6 +139,7 @@ function CandidateHomeContent() {
           title: job.title,
           body: total > 0 && mine.size > 0 ? `${details}. Vous avez ${have} compétence${have > 1 ? "s" : ""} sur ${total}.` : details,
           icon: "M8 7V5h8v2M4 7h16v12H4V7Z",
+          logoUrl: job.company.logoUrl,
           primary: { label: "Voir l'offre", href: `/offres/${job.id}` },
           secondary: { label: "Toutes les offres", href: "/candidat/emplois" },
         };
